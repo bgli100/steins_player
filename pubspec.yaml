@@ -1,0 +1,40 @@
+name: steins_player
+description: "Steins Player"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  fluent_ui: 
+    git:
+      url: https://github.com/bgli100/fluent_ui.git
+      ref: master
+  system_theme: ^3.2.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+  window_manager: ^0.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - res/anon/
+    - res/anon/segments/
+    #- res/soyo/
+    #- res/soyo/segments/
+    #- res/sakiko/
+    #- res/sakiko/segments/
+    #- res/tomori/
+    #- res/tomori/segments/
+    #- res/mutsumi/
+    #- res/mutsumi/segments/
