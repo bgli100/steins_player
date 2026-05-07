@@ -209,13 +209,13 @@ class _HomePageState extends State<HomePage> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: hovered ? Colors.blue : Colors.white.withValues(alpha: 0.12),
-              width: hovered ? 2 : 1,
+              width: hovered ? 3 : 0,
             ),
             boxShadow: hovered
                 ? [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.16),
-                      blurRadius: 12,
+                      blurRadius: 16,
                       offset: const Offset(0, 8),
                     ),
                   ]
@@ -226,20 +226,23 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: Image.asset(
-                  'res/$type/cover.jpg',
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey.withValues(alpha: 0.18),
-                      alignment: Alignment.center,
-                      child: Text(
-                        type,
-                        style: const TextStyle(color: Colors.white, fontSize: 18),
-                      ),
-                    );
-                  },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'res/$type/cover.jpg',
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey.withValues(alpha: 0.18),
+                        alignment: Alignment.center,
+                        child: Text(
+                          type,
+                          style: const TextStyle(color: Colors.white, fontSize: 18),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               )
             ],

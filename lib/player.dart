@@ -41,7 +41,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   AccentColor getAccentColor() {
     switch (widget.type) {
       case "anon":
-        return Colors.magenta;
+        return AccentColor.lerp(
+          Colors.red,
+          AccentColor.swatch(const <String, Color>{
+            'darkest': Colors.white,
+            'darker':  Colors.white,
+            'dark':  Colors.white,
+            'normal':  Colors.white,
+            'light':  Colors.white,
+            'lighter':  Colors.white,
+            'lightest':  Colors.white,
+          }),
+          0.5,
+        );
       case "soyo":
         return Colors.orange;
       case "sakiko":
