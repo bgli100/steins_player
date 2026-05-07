@@ -149,6 +149,9 @@ class _HomePageState extends State<HomePage> {
           if (showBack)
             IconButton(
               icon: const Icon(Icons.west, color: Colors.white),
+              style: ButtonStyle(
+                iconSize: WidgetStatePropertyAll<double>(28.0)
+              ),
               onPressed: () => Navigator.of(context).maybePop(),
             ),
           Expanded(
