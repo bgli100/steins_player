@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' show Icons, Scaffold;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'steins.dart';
@@ -141,6 +142,50 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final state = steins.proceed(actionLetter);
     _updateState(state);
     await player.open(Media('asset:///res/${widget.type}/segments/$pos.mp4'));
+  }
+
+  String _defaultSaveFileName() {
+    final safeTitle = title.isEmpty
+        ? 'state'
+        : title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final timestamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '');
+    return '${widget.type}-$timestamp-$safeTitle.json';
+  }
+
+  Future<void> _saveGame() async {
+    final suggestedName = _defaultSaveFileName();
+    await player.pause();
+    final location = await getSaveLocation(
+      suggestedName: suggestedName,
+      acceptedTypeGroups: [
+        XTypeGroup(label: 'JSON', extensions: ['json']),
+      ],
+    );
+    if (location == null) {
+      return;
+    }
+    await steins.save(location.path);
+    debugPrint('Saved game to: ${location.path}');
+  }
+
+  Future<void> _loadGame() async {
+    final files = await openFiles(
+      acceptedTypeGroups: [
+        XTypeGroup(label: 'JSON', extensions: ['json']),
+      ],
+    );
+    if (files.isEmpty) {
+      return;
+    }
+    final file = files.first;
+    final state = await steins.load(file.path);
+    if (state == null) {
+      debugPrint('Failed to load game: ${file.path}');
+      return;
+    }
+    _updateState(state);
+    await player.open(Media('asset:///res/${widget.type}/segments/$pos.mp4'));
+    debugPrint('Loaded game from: ${file.path}');
   }
 
   void _onVideoCompleted() {
@@ -338,16 +383,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 MaterialDesktopCustomButton(
                   icon: Icon(Icons.file_download_outlined, color: getAccentColor().lighter),
                   iconSize: 24.0,
-                  onPressed: () {
-                    debugPrint('save');
-                  },
+                  onPressed: _saveGame,
                 ),
                 MaterialDesktopCustomButton(
                   icon: Icon(Icons.file_upload_outlined, color: getAccentColor().lighter),
                   iconSize: 24.0,
-                  onPressed: () {
-                    debugPrint('load');
-                  },
+                  onPressed: _loadGame,
                 ),
                 Spacer(),
                 MaterialDesktopCustomButton(

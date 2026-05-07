@@ -117,27 +117,27 @@ class Steins {
     await file.writeAsString(jsonEncode(saveData));
   }
 
-  Future<int> load(String filePath) async {
+  Future<Map<String, dynamic>?> load(String filePath) async {
     try {
       final file = File(filePath);
       if (!await file.exists()) {
-        return 0;
+        return null;
       }
 
       final raw = await file.readAsString();
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) {
-        return 0;
+        return null;
       }
 
       if (decoded['type'] != type) {
-        return 0;
+        return null;
       }
 
       final loadedPos = decoded['pos'];
       final loadedVars = decoded['vars'];
       if (loadedPos is! num || loadedVars is! Map<String, dynamic>) {
-        return 0;
+        return null;
       }
 
       final newVars = <String, int>{};
@@ -145,22 +145,22 @@ class Steins {
         final key = entry.key;
         final value = entry.value;
         if (value is! num) {
-          return 0;
+          return null;
         }
         newVars[key] = value.toInt();
       }
 
       if (!vars.keys.every(newVars.containsKey)) {
-        return 0;
+        return null;
       }
 
       pos = loadedPos.toInt();
       vars
         ..clear()
         ..addAll(newVars);
-      return pos;
+      return _currentState();
     } catch (_) {
-      return 0;
+      return null;
     }
   }
 
