@@ -103,12 +103,26 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   icon: const Icon(Icons.close),
                 ),
               ],
-              // Modify bottom button bar:
               bottomButtonBar: [
                 MaterialDesktopPlayOrPauseButton(
                   iconColor: getAccentColor().lighter,
                 ),
                 MaterialDesktopPositionIndicator(),
+                Spacer(),
+                MaterialDesktopCustomButton(
+                  icon: const Icon(Icons.file_download_outlined),
+                  iconSize: 24.0,
+                  onPressed: () {
+                    debugPrint('save');
+                  },
+                ),
+                MaterialDesktopCustomButton(
+                  icon: const Icon(Icons.file_upload_outlined),
+                  iconSize: 24.0,
+                  onPressed: () {
+                    debugPrint('load');
+                  },
+                ),
                 Spacer(),
                 MaterialDesktopCustomButton(
                   icon: ValueListenableBuilder<String>(
