@@ -30,11 +30,11 @@ flutter:
   assets:
     - res/anon/
     - res/anon/segments/
-    #- res/soyo/
-    #- res/soyo/segments/
-    #- res/sakiko/
-    #- res/sakiko/segments/
-    #- res/tomori/
-    #- res/tomori/segments/
-    #- res/mutsumi/
-    #- res/mutsumi/segments/
+    - res/soyo/
+    - res/soyo/segments/
+    - res/sakiko/
+    - res/sakiko/segments/
+    - res/tomori/
+    - res/tomori/segments/
+    - res/mutsumi/
+    - res/mutsumi/segments/

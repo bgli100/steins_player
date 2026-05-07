@@ -1,11 +1,13 @@
-import 'dart:io' show Platform, exit;
+import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' hide Colors, showDialog, ButtonStyle;
+import 'package:flutter/material.dart' show Icons;
+import 'package:media_kit/media_kit.dart';
 import 'package:system_theme/system_theme.dart';
-import 'package:media_kit/media_kit.dart';                      // Provides [Player], [Media], [Playlist] etc.
-import 'package:media_kit_video/media_kit_video.dart';          // Provides [VideoController] & [Video] etc.
 import 'package:window_manager/window_manager.dart';
+
+import 'about.dart';
+import 'player.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,157 +53,196 @@ class MyApp extends StatelessWidget {
           'lightest': SystemTheme.accentColor.lightest,
         }),
       ),
-      home: const MyHomePage(type: "anon"),
+      home: const HomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.type});
-
-  final String type;
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
-  // Create a [Player] to control playback.
-  late final player = Player();
-  // Create a [VideoController] to handle video output from [Player].
-  late final controller = VideoController(player);
+class _HomePageState extends State<HomePage> {
+  final List<String> _types = [
+    'anon',
+    'soyo',
+    'sakiko',
+    'tomori',
+    'mutsumi'
+  ];
 
-  late final ValueNotifier<String> selectedSpeedNotifier;
-  final List<String> speedOptions = ['0.5x', '1.0x', '1.5x', '2.0x'];
-  
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    selectedSpeedNotifier = ValueNotifier(speedOptions[1]);
-    player.open(Media('asset:///res/${widget.type}/segments/1.mp4'));
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    selectedSpeedNotifier.dispose();
-    player.dispose();
-    super.dispose();
-  }
-
-  AccentColor getAccentColor() {
-    switch (widget.type) {
-      case "anon":
-        return Colors.magenta;
-      case "soyo":
-        return Colors.orange;
-      case "sakiko":
-        return Colors.blue;
-      case "tomori":
-        return AccentColor.swatch(const <String, Color>{
-          'darkest': Color(0xFF11100F),
-          'darker': Color(0xFF201F1E),
-          'dark': Color(0xFF323130),
-          'normal': Color(0xFF605E5C),
-          'light': Color(0xFF979593),
-          'lighter': Color(0xFFBEBBB8),
-          'lightest': Color(0xFFE1DFDD),
-        });
-      case "mutsumi":
-      default:
-        return Colors.green;
-    }
-  }
+  String? _hoveredType;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width,
-          height: MediaQuery.of(context).size.width * 9.0 / 16.0,
-          // Use [Video] widget to display video output.
-          child: MaterialDesktopVideoControlsTheme(
-            normal: MaterialDesktopVideoControlsThemeData(
-              // Modify theme options:
-              seekBarThumbColor: getAccentColor().light,
-              seekBarPositionColor: getAccentColor().lighter,
-              toggleFullscreenOnDoublePress: false,
-              
-              // Modify top button bar:
-              topButtonBar: [
-                MaterialDesktopCustomButton(
-                  onPressed: () {
-                    debugPrint('Return button pressed. TODO: return to home page.');
-                  },
-                  icon: const Icon(Icons.west),
-                ),
-                Expanded(
-                  child: DragToMoveArea(
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
-                  ),
-                ),
-                MaterialDesktopCustomButton(
-                  onPressed: () {
-                    exit(0);
-                  },
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-              // Modify bottom button bar:
-              bottomButtonBar: [
-                MaterialDesktopPlayOrPauseButton(
-                  iconColor: getAccentColor().lighter,
-                ),
-                MaterialDesktopPositionIndicator(),
-                Spacer(),
-                MaterialDesktopCustomButton(
-                  icon: ValueListenableBuilder<String>(
-                    valueListenable: selectedSpeedNotifier,
-                    builder: (context, speed, child) {
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            height: 24.0,
-                            alignment: Alignment.topCenter,
-                            child: Text(
-                              speed,
-                              style: TextStyle(
-                                color: getAccentColor().lighter,
-                                fontSize: 14.0,
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  iconSize: 24.0,
-                  onPressed: () {
-                    final currentIndex =
-                        speedOptions.indexOf(selectedSpeedNotifier.value);
-                    final nextIndex = (currentIndex + 1) % speedOptions.length;
-                    selectedSpeedNotifier.value = speedOptions[nextIndex];
-                    player.setRate(double.parse(
-                      selectedSpeedNotifier.value.replaceAll('x', ''),
-                    ));
+    return NavigationView(
+      titleBar: _buildTopButtonBar(context, showBack: false),
+      content: ScaffoldPage(
+        content: Stack(
+          children: [
+            Center(
+              child: FractionallySizedBox(
+                widthFactor: 0.94,
+                heightFactor: 0.94,
+                child: LayoutBuilder(
+                   builder: (context, constraints) {
+                    return Column(
+                      children: [
+                        Expanded(child: _buildRow(0, 3)),
+                        const SizedBox(height: 16),
+                        Expanded(child: _buildRow(3, 3, includeEmptyLast: true)),
+                      ],
+                    );
                   },
                 ),
-                MaterialDesktopVolumeButton(),
-              ],
-            ),
-            fullscreen: const MaterialDesktopVideoControlsThemeData(),
-            child: Scaffold(
-              body: Video(
-                wakelock: false,
-                controller: controller,
               ),
             ),
+            Positioned(
+              right: 24,
+              bottom: 24,
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: const Icon(FluentIcons.help, color: Colors.white),
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStatePropertyAll<Color>(Colors.transparent),
+                    padding: WidgetStatePropertyAll<EdgeInsets>(EdgeInsets.zero),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      FluentPageRoute(builder: (context) => const AboutPage()),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopButtonBar(BuildContext context, {required bool showBack}) {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+      ),
+      child: Row(
+        children: [
+          if (showBack)
+            IconButton(
+              icon: const Icon(Icons.west, color: Colors.white),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+          Expanded(
+            child: DragToMoveArea(
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            style: ButtonStyle(
+              iconSize: WidgetStatePropertyAll<double>(28.0)
+            ),
+            onPressed: () => exit(0),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRow(int startIndex, int count, {bool includeEmptyLast = false}) {
+    final cells = List<Widget>.generate(count, (index) {
+      final overallIndex = startIndex + index;
+      if (includeEmptyLast && overallIndex >= _types.length) {
+        return Expanded(child: Container());
+      }
+      final type = _types[overallIndex];
+      return Expanded(child: _buildCell(type));
+    });
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < cells.length; i++) ...[
+          if (i > 0) const SizedBox(width: 16),
+          cells[i],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCell(String type) {
+    final hovered = _hoveredType == type;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hoveredType = type),
+      onExit: (_) => setState(() => _hoveredType = null),
+      child: GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            FluentPageRoute(builder: (context) => PlayerPage(type: type)),
+          );
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOut,
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          decoration: BoxDecoration(
+            color: hovered ? Colors.white.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hovered ? Colors.blue : Colors.white.withValues(alpha: 0.12),
+              width: hovered ? 2 : 1,
+            ),
+            boxShadow: hovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.16),
+                      blurRadius: 12,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          clipBehavior: Clip.hardEdge,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Image.asset(
+                  'res/$type/cover.jpg',
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey.withValues(alpha: 0.18),
+                      alignment: Alignment.center,
+                      child: Text(
+                        type,
+                        style: const TextStyle(color: Colors.white, fontSize: 18),
+                      ),
+                    );
+                  },
+                ),
+              )
+            ],
           ),
         ),
       ),
