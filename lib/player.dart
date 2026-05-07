@@ -174,6 +174,119 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }).toList();
   }
 
+  Widget _buildChoiceOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: .25),
+        child: Column(
+          children: [
+            Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              decoration: BoxDecoration(color: Colors.transparent),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.west, color: getAccentColor().lighter),
+                    style: ButtonStyle(
+                      iconSize: WidgetStatePropertyAll<double>(28.0),
+                    ),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        ValueListenableBuilder<bool>(
+                          valueListenable: fullyLoadedNotifier,
+                          builder: (context, value, child) {
+                            if (!value) return Row(children: []);
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: _buildVisibleVarButtons(),
+                            );
+                          },
+                        ),
+                        Positioned.fill(
+                          child: DragToMoveArea(
+                            child: Container(color: Colors.transparent),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: getAccentColor().lighter),
+                    style: ButtonStyle(
+                      iconSize: WidgetStatePropertyAll<double>(28.0),
+                    ),
+                    onPressed: () => exit(0),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 24.0,
+              ),
+              child: Row(
+                children: List.generate(4, (index) {
+                  final letter = String.fromCharCode(65 + index);
+                  final text = _currentChoiceOptions[letter];
+                  if (text == null) {
+                    return const Expanded(child: SizedBox());
+                  }
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: FilledButton(
+                        style: ButtonStyle(
+                          backgroundColor: WidgetStatePropertyAll<Color>(
+                            getAccentColor().lightest,
+                          ),
+                        ),
+                        onPressed: () async {
+                          await _onChoiceSelected(letter);
+                        },
+
+                        child: Column(
+                          mainAxisSize: MainAxisSize.max,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              letter,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: "Microsoft YaHei UI",
+                              ),
+                            ),
+                            Text(
+                              text,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.black,
+                                fontFamily: "Microsoft YaHei UI",
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,12 +306,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 ),
                 Expanded(
                   child: Stack(
+                    alignment: Alignment.topCenter,
                     children: [
                       ValueListenableBuilder<bool>(
                         valueListenable: fullyLoadedNotifier,
                         builder: (context, value, child) {
                           if (!value) return Row(children: []);
-                          return Row(children: _buildVisibleVarButtons());
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: _buildVisibleVarButtons(),
+                          );
                         },
                       ),
                       Positioned.fill(
@@ -269,104 +386,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 children: [
                   Video(wakelock: false, controller: controller),
                   if (_showChoiceOverlay)
-                    Positioned.fill(
-                      child: Container(
-                        color: Colors.black.withValues(alpha: .25),
-                        child: Column(
-                          children: [
-                            Container(
-                              height: 56,
-                              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                              decoration: BoxDecoration(color: Colors.transparent),
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    icon: Icon(Icons.west, color: getAccentColor().lighter),
-                                    style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
-                                    onPressed: () => Navigator.of(context).maybePop(),
-                                  ),
-                                  Expanded(
-                                    child: Stack(
-                                      children: [
-                                        ValueListenableBuilder<bool>(
-                                          valueListenable: fullyLoadedNotifier,
-                                          builder: (context, value, child) {
-                                            if (!value) return Row(children: []);
-                                            return Row(children: _buildVisibleVarButtons());
-                                          },
-                                        ),
-                                        Positioned.fill(
-                                          child: DragToMoveArea(
-                                            child: Container(color: Colors.transparent),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.close, color: getAccentColor().lighter),
-                                    style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
-                                    onPressed: () => exit(0),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Spacer(),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-                              child: Row(
-                                children: List.generate(4, (index) {
-                                  final letter = String.fromCharCode(65 + index);
-                                  final text = _currentChoiceOptions[letter];
-                                  if (text == null) {
-                                    return const Expanded(child: SizedBox());
-                                  }
-                                  return Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                      child: FilledButton(
-                                        style: ButtonStyle(
-                                          backgroundColor: WidgetStatePropertyAll<Color>(getAccentColor().lightest),
-                                        ),
-                                        onPressed: () async {
-                                          await _onChoiceSelected(letter);
-                                        },
-                                        
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.max,
-                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              letter, 
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.black, 
-                                                fontWeight: FontWeight.bold,
-                                                fontFamily: "Microsoft YaHei UI",
-                                              ),
-                                            ),
-                                            Text(
-                                              text,
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.black, 
-                                                fontFamily: "Microsoft YaHei UI",
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    _buildChoiceOverlay(),
                 ],
               ),
             ),

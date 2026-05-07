@@ -56,13 +56,12 @@ class Steins {
   }
 
   Map<String, dynamic> proceed(String? actionLetter) {
-    _randomizeRandomVars();
-
     final node = _getCurrentNode();
     if (actionLetter == null) {
       if (node != null && node['type'] == 'direct') {
         _advanceDirectNodeOnce(node);
       }
+      _randomizeRandomVars();
       return _currentState();
     }
 
@@ -81,6 +80,7 @@ class Steins {
       }
     }
     debugPrint('proceed with action: $actionLetter, new pos: $pos, vars: $vars');
+    _randomizeRandomVars();
     return _currentState();
   }
 
