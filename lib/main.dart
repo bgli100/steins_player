@@ -107,7 +107,7 @@ class _HomePageState extends State<HomePage> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: Colors.blue,
+                  color: Colors.green,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -118,8 +118,9 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
                 child: IconButton(
-                  icon: const Icon(FluentIcons.help, color: Colors.white),
+                  icon: const Icon(FluentIcons.info, color: Colors.white),
                   style: ButtonStyle(
+                    iconSize: WidgetStatePropertyAll<double>(28.0),
                     backgroundColor: WidgetStatePropertyAll<Color>(Colors.transparent),
                     padding: WidgetStatePropertyAll<EdgeInsets>(EdgeInsets.zero),
                   ),

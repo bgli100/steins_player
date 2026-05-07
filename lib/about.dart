@@ -41,9 +41,11 @@ class _AboutPageState extends State<AboutPage> {
                       children: const [
                         Text('Steins Player', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                         SizedBox(height: 12),
-                        Text('This app lets you launch character segments directly from the home grid and play them with native media controls.'),
+                        Text('一个 Windows 平台基于 Flutter 的 bilibili 互动视频播放器'),
+                        SizedBox(height: 12),
+                        Text('感谢 foolish_dogve 制作的无限循环系列内容'),
                         SizedBox(height: 8),
-                        Text('Tap a cover tile to open the player. The bottom-right button returns here.'),
+                        Text('感谢 Github Copilot 提供的代码生成支持'),
                       ],
                     ),
                   ),
