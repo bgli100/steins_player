@@ -25,6 +25,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final Steins steins;
   late int pos;
   late String title;
+  TextStyle get textStyle => TextStyle(
+    color: getAccentColor().lighter,
+    fontSize: 14,
+    fontFamily: "Microsoft YaHei UI",
+  );
 
   late Map<String, String> _currentChoiceOptions = {};
   bool _showChoiceOverlay = false;
@@ -161,22 +166,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              name,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: getAccentColor().lighter, 
-                fontSize: 14,
-              ),
-            ),
-            Text(
-              value,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: getAccentColor().lighter, 
-                fontSize: 14,
-              ),
-            ),
+            Text(name, textAlign: TextAlign.center, style: textStyle),
+            Text(value, textAlign: TextAlign.center, style: textStyle),
           ],
         ),
       );
@@ -212,9 +203,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                       ),
                       Positioned.fill(
                         child: DragToMoveArea(
-                          child: Container(
-                            color: Colors.transparent,
-                          ),
+                          child: Container(color: Colors.transparent),
                         ),
                       ),
                     ],
@@ -226,15 +215,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 ),
               ],
               bottomButtonBar: [
-                MaterialDesktopPlayOrPauseButton(
-                  iconColor: getAccentColor().lighter,
-                ),
-                MaterialDesktopPositionIndicator(
-                  style: TextStyle(
-                    color: getAccentColor().lighter,
-                    fontSize: 14.0,
-                  ),
-                ),
+                MaterialDesktopPlayOrPauseButton(iconColor: getAccentColor().lighter),
+                MaterialDesktopPositionIndicator(style: textStyle),
                 Spacer(),
                 MaterialDesktopCustomButton(
                   icon: Icon(Icons.file_download_outlined, color: getAccentColor().lighter),
@@ -262,13 +244,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           Container(
                             height: 24.0,
                             alignment: Alignment.topCenter,
-                            child: Text(
-                              speed,
-                              style: TextStyle(
-                                color: getAccentColor().lighter,
-                                fontSize: 14.0,
-                              ),
-                            ),
+                            child: Text(speed, style: textStyle),
                           ),
                         ],
                       );
@@ -276,8 +252,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   ),
                   iconSize: 24.0,
                   onPressed: () {
-                    final currentIndex =
-                        speedOptions.indexOf(selectedSpeedNotifier.value);
+                    final currentIndex = speedOptions.indexOf(selectedSpeedNotifier.value);
                     final nextIndex = (currentIndex + 1) % speedOptions.length;
                     selectedSpeedNotifier.value = speedOptions[nextIndex];
                     player.setRate(double.parse(
@@ -285,19 +260,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     ));
                   },
                 ),
-                MaterialDesktopVolumeButton(
-                  iconColor: getAccentColor().lighter,
-                ),
+                MaterialDesktopVolumeButton(iconColor: getAccentColor().lighter),
               ],
             ),
             fullscreen: const MaterialDesktopVideoControlsThemeData(),
             child: Scaffold(
               body: Stack(
                 children: [
-                  Video(
-                    wakelock: false,
-                    controller: controller,
-                  ),
+                  Video(wakelock: false, controller: controller),
                   if (_showChoiceOverlay)
                     Positioned.fill(
                       child: Container(
@@ -307,16 +277,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                             Container(
                               height: 56,
                               padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                              decoration: BoxDecoration(
-                                color: Colors.transparent,
-                              ),
+                              decoration: BoxDecoration(color: Colors.transparent),
                               child: Row(
                                 children: [
                                   IconButton(
                                     icon: Icon(Icons.west, color: getAccentColor().lighter),
-                                    style: ButtonStyle(
-                                      iconSize: WidgetStatePropertyAll<double>(28.0)
-                                    ),
+                                    style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
                                     onPressed: () => Navigator.of(context).maybePop(),
                                   ),
                                   Expanded(
@@ -331,9 +297,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                         ),
                                         Positioned.fill(
                                           child: DragToMoveArea(
-                                            child: Container(
-                                              color: Colors.transparent,
-                                            ),
+                                            child: Container(color: Colors.transparent),
                                           ),
                                         ),
                                       ],
@@ -341,9 +305,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   ),
                                   IconButton(
                                     icon: Icon(Icons.close, color: getAccentColor().lighter),
-                                    style: ButtonStyle(
-                                      iconSize: WidgetStatePropertyAll<double>(28.0)
-                                    ),
+                                    style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
                                     onPressed: () => exit(0),
                                   ),
                                 ],
@@ -363,6 +325,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                       child: FilledButton(
+                                        style: ButtonStyle(
+                                          backgroundColor: WidgetStatePropertyAll<Color>(getAccentColor().lightest),
+                                        ),
                                         onPressed: () async {
                                           await _onChoiceSelected(letter);
                                         },
@@ -375,15 +340,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                               letter, 
                                               style: TextStyle(
                                                 fontSize: 16,
-                                                color: getAccentColor().darker, 
-                                                fontWeight: FontWeight.bold
+                                                color: Colors.black, 
+                                                fontWeight: FontWeight.bold,
+                                                fontFamily: "Microsoft YaHei UI",
                                               ),
                                             ),
                                             Text(
                                               text,
                                               style: TextStyle(
                                                 fontSize: 16,
-                                                color: getAccentColor().darker
+                                                color: Colors.black, 
+                                                fontFamily: "Microsoft YaHei UI",
                                               ),
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
