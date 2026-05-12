@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'utils.dart';
 import 'steins.dart';
 
 class PlayerPage extends StatefulWidget {
@@ -38,7 +39,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final ValueNotifier<String> selectedSpeedNotifier;
   late final ValueNotifier<bool> fullyLoadedNotifier = ValueNotifier(false);
   final List<String> speedOptions = ['0.5x', '1.0x', '1.5x', '2.0x'];
-  
+
   @override
   void initState() {
     super.initState();
@@ -60,39 +61,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   AccentColor getAccentColor() {
-    switch (widget.type) {
-      case "anon":
-        return AccentColor.lerp(
-          Colors.red,
-          AccentColor.swatch(const <String, Color>{
-            'darkest': Colors.white,
-            'darker':  Colors.white,
-            'dark':  Colors.white,
-            'normal':  Colors.white,
-            'light':  Colors.white,
-            'lighter':  Colors.white,
-            'lightest':  Colors.white,
-          }),
-          0.5,
-        );
-      case "soyo":
-        return Colors.orange;
-      case "sakiko":
-        return Colors.blue;
-      case "tomori":
-        return AccentColor.swatch(const <String, Color>{
-          'darkest': Color(0xFF11100F),
-          'darker': Color(0xFF201F1E),
-          'dark': Color(0xFF323130),
-          'normal': Color(0xFF605E5C),
-          'light': Color(0xFF979593),
-          'lighter': Color(0xFFBEBBB8),
-          'lightest': Color(0xFFE1DFDD),
-        });
-      case "mutsumi":
-      default:
-        return Colors.green;
-    }
+    return Utils.getAccentColorForType(widget.type);
   }
 
   Future<void> _initPlayer() async {
@@ -105,7 +74,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         _onVideoCompleted();
       }
     });
-    
+
     setState(() {
       fullyLoadedNotifier.value = true;
     });
@@ -148,7 +117,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final safeTitle = title.isEmpty
         ? 'state'
         : title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final timestamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '');
+    final timestamp = DateTime.now().toIso8601String().replaceAll(
+      RegExp(r'[:.]'),
+      '',
+    );
     return '${widget.type}-$timestamp-$safeTitle.json';
   }
 
@@ -377,16 +349,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 ),
               ],
               bottomButtonBar: [
-                MaterialDesktopPlayOrPauseButton(iconColor: getAccentColor().lighter),
+                MaterialDesktopPlayOrPauseButton(
+                  iconColor: getAccentColor().lighter,
+                ),
                 MaterialDesktopPositionIndicator(style: textStyle),
                 Spacer(),
                 MaterialDesktopCustomButton(
-                  icon: Icon(Icons.file_download_outlined, color: getAccentColor().lighter),
+                  icon: Icon(
+                    Icons.file_download_outlined,
+                    color: getAccentColor().lighter,
+                  ),
                   iconSize: 24.0,
                   onPressed: _saveGame,
                 ),
                 MaterialDesktopCustomButton(
-                  icon: Icon(Icons.file_upload_outlined, color: getAccentColor().lighter),
+                  icon: Icon(
+                    Icons.file_upload_outlined,
+                    color: getAccentColor().lighter,
+                  ),
                   iconSize: 24.0,
                   onPressed: _loadGame,
                 ),
@@ -410,15 +390,21 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   ),
                   iconSize: 24.0,
                   onPressed: () {
-                    final currentIndex = speedOptions.indexOf(selectedSpeedNotifier.value);
+                    final currentIndex = speedOptions.indexOf(
+                      selectedSpeedNotifier.value,
+                    );
                     final nextIndex = (currentIndex + 1) % speedOptions.length;
                     selectedSpeedNotifier.value = speedOptions[nextIndex];
-                    player.setRate(double.parse(
-                      selectedSpeedNotifier.value.replaceAll('x', ''),
-                    ));
+                    player.setRate(
+                      double.parse(
+                        selectedSpeedNotifier.value.replaceAll('x', ''),
+                      ),
+                    );
                   },
                 ),
-                MaterialDesktopVolumeButton(iconColor: getAccentColor().lighter),
+                MaterialDesktopVolumeButton(
+                  iconColor: getAccentColor().lighter,
+                ),
               ],
             ),
             fullscreen: const MaterialDesktopVideoControlsThemeData(),
@@ -426,8 +412,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               body: Stack(
                 children: [
                   Video(wakelock: false, controller: controller),
-                  if (_showChoiceOverlay)
-                    _buildChoiceOverlay(),
+                  if (_showChoiceOverlay) _buildChoiceOverlay(),
                 ],
               ),
             ),

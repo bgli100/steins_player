@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'about.dart';
 import 'player.dart';
+import 'update.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FluentApp(
-      title: 'Steins Player',
+      title: 'Lullaby Core',
       theme: FluentThemeData(
         brightness: Brightness.dark,
         accentColor: AccentColor.swatch({
@@ -66,15 +67,17 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final List<String> _types = [
-    'anon',
-    'soyo',
-    'sakiko',
-    'tomori',
-    'mutsumi'
-  ];
+  final List<String> _types = ['anon', 'soyo', 'sakiko', 'tomori', 'mutsumi'];
 
   String? _hoveredType;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Update().checkUpdate(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,12 +91,14 @@ class _HomePageState extends State<HomePage> {
                 widthFactor: 0.94,
                 heightFactor: 0.94,
                 child: LayoutBuilder(
-                   builder: (context, constraints) {
+                  builder: (context, constraints) {
                     return Column(
                       children: [
                         Expanded(child: _buildRow(0, 3)),
                         const SizedBox(height: 16),
-                        Expanded(child: _buildRow(3, 3, includeEmptyLast: true)),
+                        Expanded(
+                          child: _buildRow(3, 3, includeEmptyLast: true),
+                        ),
                       ],
                     );
                   },
@@ -121,8 +126,12 @@ class _HomePageState extends State<HomePage> {
                   icon: const Icon(FluentIcons.info, color: Colors.white),
                   style: ButtonStyle(
                     iconSize: WidgetStatePropertyAll<double>(28.0),
-                    backgroundColor: WidgetStatePropertyAll<Color>(Colors.transparent),
-                    padding: WidgetStatePropertyAll<EdgeInsets>(EdgeInsets.zero),
+                    backgroundColor: WidgetStatePropertyAll<Color>(
+                      Colors.transparent,
+                    ),
+                    padding: WidgetStatePropertyAll<EdgeInsets>(
+                      EdgeInsets.zero,
+                    ),
                   ),
                   onPressed: () {
                     Navigator.of(context).push(
@@ -142,29 +151,23 @@ class _HomePageState extends State<HomePage> {
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-      ),
+      decoration: BoxDecoration(color: Colors.transparent),
       child: Row(
         children: [
           if (showBack)
             IconButton(
               icon: const Icon(Icons.west, color: Colors.white),
               style: ButtonStyle(
-                iconSize: WidgetStatePropertyAll<double>(28.0)
+                iconSize: WidgetStatePropertyAll<double>(28.0),
               ),
               onPressed: () => Navigator.of(context).maybePop(),
             ),
           Expanded(
-            child: DragToMoveArea(
-              child: Container(color: Colors.transparent),
-            ),
+            child: DragToMoveArea(child: Container(color: Colors.transparent)),
           ),
           IconButton(
             icon: const Icon(Icons.close),
-            style: ButtonStyle(
-              iconSize: WidgetStatePropertyAll<double>(28.0)
-            ),
+            style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
             onPressed: () => exit(0),
           ),
         ],
@@ -200,19 +203,23 @@ class _HomePageState extends State<HomePage> {
       onExit: (_) => setState(() => _hoveredType = null),
       child: GestureDetector(
         onTap: () {
-          Navigator.of(context).push(
-            FluentPageRoute(builder: (context) => PlayerPage(type: type)),
-          );
+          Navigator.of(
+            context,
+          ).push(FluentPageRoute(builder: (context) => PlayerPage(type: type)));
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeInOut,
           margin: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
-            color: hovered ? Colors.white.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
+            color: hovered
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.white.withValues(alpha: 0.03),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: hovered ? Colors.blue : Colors.white.withValues(alpha: 0.12),
+              color: hovered
+                  ? Colors.blue
+                  : Colors.white.withValues(alpha: 0.12),
               width: hovered ? 3 : 0,
             ),
             boxShadow: hovered
@@ -242,13 +249,16 @@ class _HomePageState extends State<HomePage> {
                         alignment: Alignment.center,
                         child: Text(
                           type,
-                          style: const TextStyle(color: Colors.white, fontSize: 18),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                          ),
                         ),
                       );
                     },
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
