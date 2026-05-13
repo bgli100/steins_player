@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:intl/intl.dart';
 
 import 'utils.dart';
 import 'steins.dart';
@@ -26,6 +27,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final StreamSubscription<bool> _completedSubscription;
   late final Steins steins;
   late int pos;
+  late int cid;
   late String title;
   TextStyle get textStyle => TextStyle(
     color: getAccentColor().lighter,
@@ -68,7 +70,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     steins = await Steins.create(widget.type);
     final state = steins.proceed(null);
     _updateState(state);
-    await player.open(Media('asset:///res/${widget.type}/segments/$pos.mp4'));
+    await player.open(Media('asset:///res/${widget.type}/segments/$cid.mp4'));
     _completedSubscription = player.stream.completed.listen((completed) {
       if (completed) {
         _onVideoCompleted();
@@ -83,15 +85,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void _updateState(Map<String, dynamic> state) {
     final choices = <String, String>{};
     for (final entry in state.entries) {
-      if (entry.key != 'pos' && entry.key != 'title' && entry.value != null) {
+      if (entry.key != 'pos' &&
+          entry.key != 'title' &&
+          entry.key != 'cid' &&
+          entry.value != null) {
         choices[entry.key] = entry.value.toString();
       }
     }
 
     pos = state['pos'] ?? 1;
+    cid = state['cid'] ?? 1;
     title = state['title'] ?? '';
 
-    debugPrint('pos: $pos, title: "$title", choices: $choices');
+    debugPrint('pos: $pos, cid: $cid, title: "$title", choices: $choices');
 
     setState(() {
       _currentChoiceOptions = choices;
@@ -110,18 +116,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     debugPrint('selected action: $actionLetter');
     final state = steins.proceed(actionLetter);
     _updateState(state);
-    await player.open(Media('asset:///res/${widget.type}/segments/$pos.mp4'));
+    await player.open(Media('asset:///res/${widget.type}/segments/$cid.mp4'));
   }
 
   String _defaultSaveFileName() {
     final safeTitle = title.isEmpty
         ? 'state'
         : title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final timestamp = DateTime.now().toIso8601String().replaceAll(
-      RegExp(r'[:.]'),
-      '',
-    );
-    return '${widget.type}-$timestamp-$safeTitle.json';
+    final timestamp = DateFormat(
+      'yyyy年MM月dd日HH时mm分ss秒',
+    ).format(DateTime.now()).replaceAll(RegExp(r'[:.]'), '');
+    return '${widget.type}_${timestamp}_节点$safeTitle.json';
   }
 
   Future<void> _saveGame() async {
@@ -156,16 +161,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       return;
     }
     _updateState(state);
-    await player.open(Media('asset:///res/${widget.type}/segments/$pos.mp4'));
+    await player.open(Media('asset:///res/${widget.type}/segments/$cid.mp4'));
     debugPrint('Loaded game from: ${file.path}');
   }
 
   void _onVideoCompleted() {
     if (_currentChoiceOptions.isNotEmpty) {
       setState(() {
+        debugPrint('Video completed, showing choices: $_currentChoiceOptions');
         _showChoiceOverlay = true;
       });
     } else {
+      debugPrint('Video completed, proceeding to next segment');
       _proceedAndLoad(null);
     }
   }
@@ -354,21 +361,31 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 ),
                 MaterialDesktopPositionIndicator(style: textStyle),
                 Spacer(),
-                MaterialDesktopCustomButton(
-                  icon: Icon(
-                    Icons.file_download_outlined,
-                    color: getAccentColor().lighter,
+                Tooltip(
+                  message: '保存游戏',
+                  useMousePosition: false,
+                  style: TooltipThemeData(textStyle: textStyle),
+                  child: MaterialDesktopCustomButton(
+                    icon: Icon(
+                      Icons.file_download_outlined,
+                      color: getAccentColor().lighter,
+                    ),
+                    iconSize: 24.0,
+                    onPressed: _saveGame,
                   ),
-                  iconSize: 24.0,
-                  onPressed: _saveGame,
                 ),
-                MaterialDesktopCustomButton(
-                  icon: Icon(
-                    Icons.file_upload_outlined,
-                    color: getAccentColor().lighter,
+                Tooltip(
+                  message: '加载存档',
+                  useMousePosition: false,
+                  style: TooltipThemeData(textStyle: textStyle),
+                  child: MaterialDesktopCustomButton(
+                    icon: Icon(
+                      Icons.file_upload_outlined,
+                      color: getAccentColor().lighter,
+                    ),
+                    iconSize: 24.0,
+                    onPressed: _loadGame,
                   ),
-                  iconSize: 24.0,
-                  onPressed: _loadGame,
                 ),
                 Spacer(),
                 MaterialDesktopCustomButton(
@@ -376,12 +393,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     valueListenable: selectedSpeedNotifier,
                     builder: (context, speed, child) {
                       return Row(
-                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Container(
                             height: 24.0,
-                            alignment: Alignment.topCenter,
+                            alignment: Alignment.center,
                             child: Text(speed, style: textStyle),
                           ),
                         ],

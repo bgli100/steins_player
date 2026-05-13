@@ -11,6 +11,7 @@ class Steins {
   late final Map<String, dynamic> fileData;
 
   int pos = 1;
+  int cid = 0;
   final Map<String, int> vars = {};
 
   Steins._(this.type);
@@ -28,7 +29,8 @@ class Steins {
     final decodedConfig = jsonDecode(configString);
     final decodedFile = jsonDecode(fileString);
 
-    if (decodedConfig is! Map<String, dynamic> || decodedFile is! Map<String, dynamic>) {
+    if (decodedConfig is! Map<String, dynamic> ||
+        decodedFile is! Map<String, dynamic>) {
       throw FormatException('Steins assets must contain valid JSON maps');
     }
 
@@ -79,7 +81,9 @@ class Steins {
         }
       }
     }
-    debugPrint('proceed with action: $actionLetter, new pos: $pos, vars: $vars');
+    debugPrint(
+      'proceed with action: $actionLetter, new pos: $pos, vars: $vars',
+    );
     _randomizeRandomVars();
     return _currentState();
   }
@@ -100,19 +104,20 @@ class Steins {
     final state = <String, dynamic>{
       'pos': pos,
       'title': node?['title']?.toString() ?? '',
+      'cid': node?['cid'] ?? 0,
     };
     if (node != null && node['type'] == 'choice') {
-      state.addAll(_availableChoices(node).map((key, choice) => MapEntry(key, choice['text']?.toString() ?? '')));
+      state.addAll(
+        _availableChoices(
+          node,
+        ).map((key, choice) => MapEntry(key, choice['text']?.toString() ?? '')),
+      );
     }
     return state;
   }
 
   Future<void> save(String filePath) async {
-    final saveData = <String, dynamic>{
-      'type': type,
-      'pos': pos,
-      'vars': vars,
-    };
+    final saveData = <String, dynamic>{'type': type, 'pos': pos, 'vars': vars};
     final file = File(filePath);
     await file.writeAsString(jsonEncode(saveData));
   }
@@ -198,7 +203,9 @@ class Steins {
     return result;
   }
 
-  Map<String, Map<String, dynamic>> _availableChoices(Map<String, dynamic> node) {
+  Map<String, Map<String, dynamic>> _availableChoices(
+    Map<String, dynamic> node,
+  ) {
     final result = <String, Map<String, dynamic>>{};
     for (final entry in node.entries) {
       final key = entry.key;
