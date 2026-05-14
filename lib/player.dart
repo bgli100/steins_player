@@ -9,6 +9,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:intl/intl.dart';
 
+import 'signup.dart';
 import 'utils.dart';
 import 'steins.dart';
 
@@ -40,6 +41,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   late final ValueNotifier<String> selectedSpeedNotifier;
   late final ValueNotifier<bool> fullyLoadedNotifier = ValueNotifier(false);
+  late final ValueNotifier<String> usernameNotifier;
   final List<String> speedOptions = ['0.5x', '1.0x', '1.5x', '2.0x'];
 
   @override
@@ -47,6 +49,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     selectedSpeedNotifier = ValueNotifier(speedOptions[1]);
+    usernameNotifier = ValueNotifier(Signup.currentUsername);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initPlayer();
     });
@@ -70,7 +73,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     steins = await Steins.create(widget.type);
     final state = steins.proceed(null);
     _updateState(state);
-    await player.open(Media('asset:///res/${widget.type}/segments/$cid.mp4'));
+    await player.open(
+      Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
+    );
     _completedSubscription = player.stream.completed.listen((completed) {
       if (completed) {
         _onVideoCompleted();
@@ -116,7 +121,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     debugPrint('selected action: $actionLetter');
     final state = steins.proceed(actionLetter);
     _updateState(state);
-    await player.open(Media('asset:///res/${widget.type}/segments/$cid.mp4'));
+    await player.open(
+      Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
+    );
   }
 
   String _defaultSaveFileName() {
@@ -161,7 +168,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       return;
     }
     _updateState(state);
-    await player.open(Media('asset:///res/${widget.type}/segments/$cid.mp4'));
+    await player.open(
+      Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
+    );
     debugPrint('Loaded game from: ${file.path}');
   }
 
@@ -198,6 +207,50 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }).toList();
   }
 
+  Widget _buildTopBar() {
+    return Stack(
+      children: [
+        ValueListenableBuilder<bool>(
+          valueListenable: fullyLoadedNotifier,
+          builder: (context, value, child) {
+            if (!value) return Row(children: []);
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: _buildVisibleVarButtons(),
+            );
+          },
+        ),
+        Row(
+          children: [
+            MaterialDesktopCustomButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: Icon(Icons.west, color: getAccentColor().lighter),
+            ),
+            ValueListenableBuilder<String>(
+              valueListenable: usernameNotifier,
+              builder: (context, value, child) {
+                return Text("用户: ${Signup.currentUsername}", style: textStyle);
+              },
+            ),
+            MaterialDesktopCustomButton(
+              icon: Icon(Icons.edit, color: getAccentColor().lighter, size: 24),
+              onPressed: () => Signup.showSignupDialog(context),
+            ),
+            Expanded(
+              child: DragToMoveArea(
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            MaterialDesktopCustomButton(
+              onPressed: () => exit(0),
+              icon: Icon(Icons.close, color: getAccentColor().lighter),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildChoiceOverlay() {
     return Positioned.fill(
       child: Container(
@@ -206,47 +259,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           children: [
             Container(
               height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               decoration: BoxDecoration(color: Colors.transparent),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.west, color: getAccentColor().lighter),
-                    style: ButtonStyle(
-                      iconSize: WidgetStatePropertyAll<double>(28.0),
-                    ),
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        ValueListenableBuilder<bool>(
-                          valueListenable: fullyLoadedNotifier,
-                          builder: (context, value, child) {
-                            if (!value) return Row(children: []);
-                            return Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: _buildVisibleVarButtons(),
-                            );
-                          },
-                        ),
-                        Positioned.fill(
-                          child: DragToMoveArea(
-                            child: Container(color: Colors.transparent),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close, color: getAccentColor().lighter),
-                    style: ButtonStyle(
-                      iconSize: WidgetStatePropertyAll<double>(28.0),
-                    ),
-                    onPressed: () => exit(0),
-                  ),
-                ],
-              ),
+              child: _buildTopBar(),
             ),
             const Spacer(),
             Padding(
@@ -323,38 +338,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               seekBarThumbColor: getAccentColor().light,
               seekBarPositionColor: getAccentColor().lighter,
               toggleFullscreenOnDoublePress: false,
-              topButtonBar: [
-                MaterialDesktopCustomButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(Icons.west, color: getAccentColor().lighter),
-                ),
-                Expanded(
-                  child: Stack(
-                    alignment: Alignment.topCenter,
-                    children: [
-                      ValueListenableBuilder<bool>(
-                        valueListenable: fullyLoadedNotifier,
-                        builder: (context, value, child) {
-                          if (!value) return Row(children: []);
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: _buildVisibleVarButtons(),
-                          );
-                        },
-                      ),
-                      Positioned.fill(
-                        child: DragToMoveArea(
-                          child: Container(color: Colors.transparent),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                MaterialDesktopCustomButton(
-                  onPressed: () => exit(0),
-                  icon: Icon(Icons.close, color: getAccentColor().lighter),
-                ),
-              ],
+              topButtonBar: [Expanded(child: _buildTopBar())],
               bottomButtonBar: [
                 MaterialDesktopPlayOrPauseButton(
                   iconColor: getAccentColor().lighter,

@@ -1,10 +1,6 @@
-import 'dart:io';
-
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:steins_player/utils.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:window_manager/window_manager.dart';
 
 import 'update.dart';
 
@@ -32,7 +28,7 @@ class _AboutPageState extends State<AboutPage> {
   @override
   Widget build(BuildContext context) {
     return NavigationView(
-      titleBar: _buildTopButtonBar(context),
+      titleBar: Utils.buildTopButtonBar(context, showBack: true),
       content: ScaffoldPage(
         content: Stack(
           children: [
@@ -209,30 +205,6 @@ class _AboutPageState extends State<AboutPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTopButtonBar(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.west),
-            style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          Expanded(
-            child: DragToMoveArea(child: Container(color: Colors.transparent)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
-            onPressed: () => exit(0),
-          ),
-        ],
       ),
     );
   }

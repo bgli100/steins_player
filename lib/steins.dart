@@ -23,8 +23,10 @@ class Steins {
   }
 
   Future<void> _loadAssets() async {
-    final configString = await rootBundle.loadString('res/$type/config.json');
-    final fileString = await rootBundle.loadString('res/$type/file.json');
+    final configString = await rootBundle.loadString(
+      'res/works/$type/config.json',
+    );
+    final fileString = await rootBundle.loadString('res/works/$type/file.json');
 
     final decodedConfig = jsonDecode(configString);
     final decodedFile = jsonDecode(fileString);

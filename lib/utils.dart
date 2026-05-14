@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:window_manager/window_manager.dart';
 
 class Utils {
   static AccentColor getAccentColorForType(String type) {
@@ -35,5 +39,37 @@ class Utils {
       default:
         return Colors.green;
     }
+  }
+
+  static Widget buildTopButtonBar(
+    BuildContext context, {
+    required bool showBack,
+  }) {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      decoration: BoxDecoration(color: Colors.transparent),
+      foregroundDecoration: BoxDecoration(color: Colors.transparent),
+      child: Row(
+        children: [
+          if (showBack)
+            IconButton(
+              icon: const Icon(Icons.west, color: Colors.white),
+              style: ButtonStyle(
+                iconSize: WidgetStatePropertyAll<double>(28.0),
+              ),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+          Expanded(
+            child: DragToMoveArea(child: Container(color: Colors.transparent)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
+            onPressed: () => exit(0),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "steins_player" "\0"
+            VALUE "CompanyName", "Limbo Company" "\0"
+            VALUE "FileDescription", "Lullaby Core" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "steins_player" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "steins_player.exe" "\0"
-            VALUE "ProductName", "steins_player" "\0"
+            VALUE "InternalName", "Lullaby Core" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Limbo Company. All rights reserved." "\0"
+            VALUE "OriginalFilename", "lullaby_core.exe" "\0"
+            VALUE "ProductName", "Lullaby Core" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

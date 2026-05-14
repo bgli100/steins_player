@@ -1,19 +1,23 @@
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:system_theme/system_theme.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'about.dart';
 import 'player.dart';
+import 'signup.dart';
 import 'update.dart';
+import 'splash.dart';
+import 'utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await windowManager.ensureInitialized();
+  await Signup.readUsername();
 
   if (Platform.isWindows) {
     WindowOptions windowOptions = const WindowOptions(
@@ -54,7 +58,7 @@ class MyApp extends StatelessWidget {
           'lightest': SystemTheme.accentColor.lightest,
         }),
       ),
-      home: const HomePage(),
+      home: const SplashPage(),
     );
   }
 }
@@ -68,124 +72,142 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final List<String> _types = ['anon', 'soyo', 'sakiko', 'tomori', 'mutsumi'];
+  late final player = Player();
+  late final controller = VideoController(player);
 
   String? _hoveredType;
 
   @override
   void initState() {
     super.initState();
+    player.setVolume(50.0);
+    player.open(Media('asset:///res/global/background.mp4'));
+    player.stream.completed.listen((completed) {
+      if (completed) {
+        player.seek(Duration.zero);
+        player.play();
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Update().checkUpdate(context);
+      if (Signup.currentUsername == '') Signup.showSignupDialog(context);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return NavigationView(
-      titleBar: _buildTopButtonBar(context, showBack: false),
-      content: ScaffoldPage(
-        content: Stack(
-          children: [
-            Center(
-              child: FractionallySizedBox(
-                widthFactor: 0.94,
-                heightFactor: 0.94,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Column(
-                      children: [
-                        Expanded(child: _buildRow(0, 3)),
-                        const SizedBox(height: 16),
-                        Expanded(
-                          child: _buildRow(3, 3, includeEmptyLast: true),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-            Positioned(
-              right: 24,
-              bottom: 24,
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(FluentIcons.info, color: Colors.white),
-                  style: ButtonStyle(
-                    iconSize: WidgetStatePropertyAll<double>(28.0),
-                    backgroundColor: WidgetStatePropertyAll<Color>(
-                      Colors.transparent,
-                    ),
-                    padding: WidgetStatePropertyAll<EdgeInsets>(
-                      EdgeInsets.zero,
+    return Stack(
+      children: [
+        Video(
+          wakelock: false,
+          controller: controller,
+          controls: NoVideoControls,
+        ),
+        NavigationPaneTheme(
+          data: NavigationPaneThemeData(backgroundColor: Colors.transparent),
+          child: NavigationView(
+            titleBar: Utils.buildTopButtonBar(context, showBack: false),
+            content: ScaffoldPage(
+              content: Stack(
+                children: [
+                  Center(
+                    child: FractionallySizedBox(
+                      widthFactor: 0.94,
+                      heightFactor: 0.94,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          double totalWidth = constraints.maxWidth;
+                          double cellWidth = (totalWidth - 32) / 3;
+                          double cellHeight = cellWidth * 9 / 16 + 8;
+                          double rowHeight = cellHeight;
+                          return Column(
+                            children: [
+                              SizedBox(
+                                height: rowHeight,
+                                child: _buildRow(0, 3, cellWidth, cellHeight),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                height: rowHeight,
+                                child: _buildRow(
+                                  3,
+                                  3,
+                                  cellWidth,
+                                  cellHeight,
+                                  includeEmptyLast: true,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      FluentPageRoute(builder: (context) => const AboutPage()),
-                    );
-                  },
-                ),
+                  Positioned(
+                    right: 24,
+                    bottom: 24,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(FluentIcons.info, color: Colors.white),
+                        style: ButtonStyle(
+                          iconSize: WidgetStatePropertyAll<double>(28.0),
+                          backgroundColor: WidgetStatePropertyAll<Color>(
+                            Colors.transparent,
+                          ),
+                          padding: WidgetStatePropertyAll<EdgeInsets>(
+                            EdgeInsets.zero,
+                          ),
+                        ),
+                        onPressed: () async {
+                          player.pause();
+                          await Navigator.of(context).push(
+                            FluentPageRoute(
+                              builder: (context) => const AboutPage(),
+                            ),
+                          );
+                          player.play();
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildTopButtonBar(BuildContext context, {required bool showBack}) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      decoration: BoxDecoration(color: Colors.transparent),
-      child: Row(
-        children: [
-          if (showBack)
-            IconButton(
-              icon: const Icon(Icons.west, color: Colors.white),
-              style: ButtonStyle(
-                iconSize: WidgetStatePropertyAll<double>(28.0),
-              ),
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
-          Expanded(
-            child: DragToMoveArea(child: Container(color: Colors.transparent)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            style: ButtonStyle(iconSize: WidgetStatePropertyAll<double>(28.0)),
-            onPressed: () => exit(0),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRow(int startIndex, int count, {bool includeEmptyLast = false}) {
+  Widget _buildRow(
+    int startIndex,
+    int count,
+    double cellWidth,
+    double cellHeight, {
+    bool includeEmptyLast = false,
+  }) {
     final cells = List<Widget>.generate(count, (index) {
       final overallIndex = startIndex + index;
       if (includeEmptyLast && overallIndex >= _types.length) {
-        return Expanded(child: Container());
+        return SizedBox(width: cellWidth, height: cellHeight);
       }
       final type = _types[overallIndex];
-      return Expanded(child: _buildCell(type));
+      return SizedBox(width: cellWidth, child: _buildCell(type, cellHeight));
     });
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < cells.length; i++) ...[
           if (i > 0) const SizedBox(width: 16),
@@ -195,22 +217,25 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCell(String type) {
+  Widget _buildCell(String type, double cellHeight) {
     final hovered = _hoveredType == type;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hoveredType = type),
       onExit: (_) => setState(() => _hoveredType = null),
       child: GestureDetector(
-        onTap: () {
-          Navigator.of(
+        onTap: () async {
+          player.pause();
+          await Navigator.of(
             context,
           ).push(FluentPageRoute(builder: (context) => PlayerPage(type: type)));
+          player.play();
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeInOut,
-          margin: const EdgeInsets.symmetric(vertical: 4),
+          height: cellHeight,
+          width: double.infinity,
           decoration: BoxDecoration(
             color: hovered
                 ? Colors.white.withValues(alpha: 0.06)
@@ -240,7 +265,7 @@ class _HomePageState extends State<HomePage> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Image.asset(
-                    'res/$type/cover.jpg',
+                    'res/works/$type/cover.png',
                     fit: BoxFit.cover,
                     width: double.infinity,
                     errorBuilder: (context, error, stackTrace) {

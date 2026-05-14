@@ -23,6 +23,8 @@ dependencies:
   http: ^1.6.0
   url_launcher: ^6.3.2
   intl: ^0.20.2
+  path_provider: ^2.1.5
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
@@ -32,13 +34,14 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - res/anon/
-    - res/anon/segments/
-    - res/soyo/
-    - res/soyo/segments/
-    - res/sakiko/
-    - res/sakiko/segments/
-    - res/tomori/
-    - res/tomori/segments/
-    - res/mutsumi/
-    - res/mutsumi/segments/
+    - res/global/
+    - res/works/anon/
+    - res/works/anon/segments/
+    - res/works/soyo/
+    - res/works/soyo/segments/
+    - res/works/sakiko/
+    - res/works/sakiko/segments/
+    - res/works/tomori/
+    - res/works/tomori/segments/
+    - res/works/mutsumi/
+    - res/works/mutsumi/segments/
