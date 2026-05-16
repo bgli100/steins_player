@@ -65,6 +65,9 @@ class Steins {
       if (node != null && node['type'] == 'direct') {
         _advanceDirectNodeOnce(node);
       }
+      if (node != null && node['type'] == 'exit') {
+        exit(0);
+      }
       _randomizeRandomVars();
       return _currentState();
     }

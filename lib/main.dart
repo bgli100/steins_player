@@ -16,10 +16,10 @@ import 'utils.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-  await windowManager.ensureInitialized();
   await Signup.readUsername();
 
   if (Platform.isWindows) {
+    await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
       size: Size(1280, 720),
       center: true,
@@ -70,17 +70,31 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final List<String> _types = ['anon', 'soyo', 'sakiko', 'tomori', 'mutsumi'];
   late final player = Player();
   late final controller = VideoController(player);
+  late AnimationController _fadeInController;
+  bool _showFadeInOverlay = true;
 
   String? _hoveredType;
 
   @override
   void initState() {
     super.initState();
-    player.setVolume(50.0);
+    _fadeInController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    );
+    _fadeInController.addListener(() {
+      setState(() {});
+    });
+    _fadeInController.forward().then((_) {
+      setState(() {
+        _showFadeInOverlay = false;
+      });
+    });
+    player.setVolume(100.0);
     player.open(Media('asset:///res/global/background.mp4'));
     player.stream.completed.listen((completed) {
       if (completed) {
@@ -92,6 +106,12 @@ class _HomePageState extends State<HomePage> {
       Update().checkUpdate(context);
       if (Signup.currentUsername == '') Signup.showSignupDialog(context);
     });
+  }
+
+  @override
+  void dispose() {
+    _fadeInController.dispose();
+    super.dispose();
   }
 
   @override
@@ -188,6 +208,13 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
+        if (_showFadeInOverlay)
+          Positioned.fill(
+            child: Opacity(
+              opacity: 1.0 - _fadeInController.value,
+              child: Container(color: Colors.black),
+            ),
+          ),
       ],
     );
   }

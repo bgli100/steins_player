@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' show Icons, Scaffold;
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:media_kit_video/media_kit_video_controls/src/controls/extensions/duration.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:intl/intl.dart';
 
@@ -23,8 +25,8 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
-  late final player = Player();
-  late final controller = VideoController(player);
+  late final _player = Player();
+  late final _controller = VideoController(_player);
   late final StreamSubscription<bool> _completedSubscription;
   late final Steins steins;
   late int pos;
@@ -60,8 +62,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     selectedSpeedNotifier.dispose();
     fullyLoadedNotifier.dispose();
+    usernameNotifier.dispose();
     _completedSubscription.cancel();
-    player.dispose();
+    _player.dispose();
     super.dispose();
   }
 
@@ -73,10 +76,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     steins = await Steins.create(widget.type);
     final state = steins.proceed(null);
     _updateState(state);
-    await player.open(
+    await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
     );
-    _completedSubscription = player.stream.completed.listen((completed) {
+    _completedSubscription = _player.stream.completed.listen((completed) {
       if (completed) {
         _onVideoCompleted();
       }
@@ -121,7 +124,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     debugPrint('selected action: $actionLetter');
     final state = steins.proceed(actionLetter);
     _updateState(state);
-    await player.open(
+    await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
     );
   }
@@ -138,7 +141,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> _saveGame() async {
     final suggestedName = _defaultSaveFileName();
-    await player.pause();
+    await _player.pause();
     final location = await getSaveLocation(
       suggestedName: suggestedName,
       acceptedTypeGroups: [
@@ -168,7 +171,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       return;
     }
     _updateState(state);
-    await player.open(
+    await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
     );
     debugPrint('Loaded game from: ${file.path}');
@@ -326,6 +329,37 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
   }
 
+  VideoController controller(BuildContext context) =>
+      VideoStateInheritedWidget.of(context).state.widget.controller;
+
+  Map<ShortcutActivator, VoidCallback> keyboardShortcuts(BuildContext context) {
+    return {
+      const SingleActivator(LogicalKeyboardKey.mediaPlay): () => _player.play(),
+      const SingleActivator(LogicalKeyboardKey.mediaPause): () =>
+          _player.pause(),
+      const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () =>
+          _player.playOrPause(),
+      const SingleActivator(LogicalKeyboardKey.space): () =>
+          _player.playOrPause(),
+      const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
+        final rate = _player.state.position - const Duration(seconds: 5);
+        _player.seek(rate.clamp(Duration.zero, _player.state.duration));
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowRight): () {
+        final rate = _player.state.position + const Duration(seconds: 5);
+        _player.seek(rate.clamp(Duration.zero, _player.state.duration));
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowUp): () {
+        final volume = _player.state.volume + 5.0;
+        _player.setVolume(volume.clamp(0.0, 100.0));
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowDown): () {
+        final volume = _player.state.volume - 5.0;
+        _player.setVolume(volume.clamp(0.0, 100.0));
+      },
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -335,6 +369,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           height: MediaQuery.of(context).size.width * 9.0 / 16.0,
           child: MaterialDesktopVideoControlsTheme(
             normal: MaterialDesktopVideoControlsThemeData(
+              keyboardShortcuts: keyboardShortcuts(context),
               seekBarThumbColor: getAccentColor().light,
               seekBarPositionColor: getAccentColor().lighter,
               toggleFullscreenOnDoublePress: false,
@@ -395,7 +430,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     );
                     final nextIndex = (currentIndex + 1) % speedOptions.length;
                     selectedSpeedNotifier.value = speedOptions[nextIndex];
-                    player.setRate(
+                    _player.setRate(
                       double.parse(
                         selectedSpeedNotifier.value.replaceAll('x', ''),
                       ),
@@ -411,7 +446,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             child: Scaffold(
               body: Stack(
                 children: [
-                  Video(wakelock: false, controller: controller),
+                  Video(wakelock: false, controller: _controller),
                   if (_showChoiceOverlay) _buildChoiceOverlay(),
                 ],
               ),
