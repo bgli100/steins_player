@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class Update {
-  static final String currentVersion = '0.3.2';
+  static final String currentVersion = '0.3.3';
 
   TextStyle get textStyle =>
       TextStyle(fontSize: 18, fontFamily: "Microsoft YaHei UI");

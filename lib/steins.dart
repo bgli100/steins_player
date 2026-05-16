@@ -59,7 +59,7 @@ class Steins {
     }
   }
 
-  Map<String, dynamic> proceed(String? actionLetter) {
+  Map<String, dynamic>? proceed(String? actionLetter) {
     final node = _getCurrentNode();
     if (actionLetter == null) {
       if (node != null && node['type'] == 'direct') {
@@ -67,6 +67,9 @@ class Steins {
       }
       if (node != null && node['type'] == 'exit') {
         exit(0);
+      }
+      if (node == null || node['type'] == 'leaf') {
+        return null;
       }
       _randomizeRandomVars();
       return _currentState();

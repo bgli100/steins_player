@@ -75,7 +75,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> _initPlayer() async {
     steins = await Steins.create(widget.type);
     final state = steins.proceed(null);
-    _updateState(state);
+    if (state != null) _updateState(state);
     await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
     );
@@ -123,6 +123,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> _proceedAndLoad(String? actionLetter) async {
     debugPrint('selected action: $actionLetter');
     final state = steins.proceed(actionLetter);
+    if (state == null) {
+      debugPrint('No more segments to play. Ending game.');
+      return;
+    }
     _updateState(state);
     await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
