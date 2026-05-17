@@ -40,22 +40,43 @@ class _AboutPageState extends State<AboutPage> {
                     padding: const EdgeInsets.all(24.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          'Lullaby Core ${Update.currentVersion}',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: "Microsoft YaHei UI",
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Image.asset(
+                              'res/icon.png',
+                              width: 192,
+                              height: 192,
+                            ),
+                            const SizedBox(width: 18),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Lullaby Core ${Update.currentVersion}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: "Microsoft YaHei UI",
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    '一个 Windows 平台基于 Flutter 的 bilibili 互动视频播放器',
+                                    style: textStyle,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '一个 Windows 平台基于 Flutter 的 bilibili 互动视频播放器',
-                          style: textStyle,
-                        ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 18),
                         Text(
                           '感谢 foolish_dogve 制作的无限循环系列内容 (点击访问原作)',
                           style: textStyle,
