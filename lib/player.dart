@@ -44,6 +44,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final ValueNotifier<String> selectedSpeedNotifier;
   late final ValueNotifier<bool> fullyLoadedNotifier = ValueNotifier(false);
   late final ValueNotifier<String> usernameNotifier;
+  late final ValueNotifier<bool> isFullscreenNotifier = ValueNotifier(false);
   final List<String> speedOptions = ['0.5x', '1.0x', '1.5x', '2.0x'];
 
   @override
@@ -63,6 +64,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     selectedSpeedNotifier.dispose();
     fullyLoadedNotifier.dispose();
     usernameNotifier.dispose();
+    isFullscreenNotifier.dispose();
     _completedSubscription.cancel();
     _player.dispose();
     super.dispose();
@@ -79,12 +81,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
     );
-    _completedSubscription = _player.stream.completed.listen((completed) {
+    _completedSubscription = _player.stream.completed.listen((completed) async {
       if (completed) {
-        _onVideoCompleted();
+        await _onVideoCompleted();
       }
     });
-
     setState(() {
       fullyLoadedNotifier.value = true;
     });
@@ -145,7 +146,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> _saveGame() async {
     final suggestedName = _defaultSaveFileName();
-    await _player.pause();
+    final isPaused = _player.state.playing == false;
+    if (!isPaused) {
+      await _player.pause();
+    }
     final location = await getSaveLocation(
       suggestedName: suggestedName,
       acceptedTypeGroups: [
@@ -153,35 +157,53 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       ],
     );
     if (location == null) {
+      if (!isPaused) {
+        await _player.play();
+      }
       return;
     }
     await steins.save(location.path);
     debugPrint('Saved game to: ${location.path}');
+    if (!isPaused) {
+      await _player.play();
+    }
   }
 
   Future<void> _loadGame() async {
+    final isPaused = _player.state.playing == false;
+    if (!isPaused) {
+      await _player.pause();
+    }
     final files = await openFiles(
       acceptedTypeGroups: [
         XTypeGroup(label: 'JSON', extensions: ['json']),
       ],
     );
+
     if (files.isEmpty) {
+      if (!isPaused) {
+        await _player.play();
+      }
       return;
     }
     final file = files.first;
     final state = await steins.load(file.path);
     if (state == null) {
       debugPrint('Failed to load game: ${file.path}');
+      if (!isPaused) {
+        await _player.play();
+      }
       return;
     }
     _updateState(state);
     await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
+      play: !isPaused,
     );
     debugPrint('Loaded game from: ${file.path}');
   }
 
-  void _onVideoCompleted() {
+  Future<void> _onVideoCompleted() async {
     if (_currentChoiceOptions.isNotEmpty) {
       setState(() {
         debugPrint('Video completed, showing choices: $_currentChoiceOptions');
@@ -189,7 +211,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       });
     } else {
       debugPrint('Video completed, proceeding to next segment');
-      _proceedAndLoad(null);
+      await _proceedAndLoad(null);
+    }
+  }
+
+  Future<void> _toggleFullscreen() async {
+    isFullscreenNotifier.value = !isFullscreenNotifier.value;
+    if (isFullscreenNotifier.value) {
+      await windowManager.setFullScreen(true);
+    } else {
+      await windowManager.setFullScreen(false);
     }
   }
 
@@ -241,7 +272,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             ),
             MaterialDesktopCustomButton(
               icon: Icon(Icons.edit, color: getAccentColor().lighter, size: 24),
-              onPressed: () => Signup.showSignupDialog(context),
+              onPressed: () async {
+                final paused = !_player.state.playing;
+                if (!paused) {
+                  await _player.pause();
+                }
+                await Signup.showSignupDialog(context);
+                if (!paused) {
+                  await _player.play();
+                }
+              },
             ),
             Expanded(
               child: DragToMoveArea(
@@ -367,96 +407,197 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width,
-          height: MediaQuery.of(context).size.width * 9.0 / 16.0,
-          child: MaterialDesktopVideoControlsTheme(
-            normal: MaterialDesktopVideoControlsThemeData(
-              keyboardShortcuts: keyboardShortcuts(context),
-              seekBarThumbColor: getAccentColor().light,
-              seekBarPositionColor: getAccentColor().lighter,
-              toggleFullscreenOnDoublePress: false,
-              topButtonBar: [Expanded(child: _buildTopBar())],
-              bottomButtonBar: [
-                MaterialDesktopPlayOrPauseButton(
-                  iconColor: getAccentColor().lighter,
-                ),
-                MaterialDesktopPositionIndicator(style: textStyle),
-                Spacer(),
-                Tooltip(
-                  message: '保存游戏',
-                  useMousePosition: false,
-                  style: TooltipThemeData(textStyle: textStyle),
-                  child: MaterialDesktopCustomButton(
-                    icon: Icon(
-                      Icons.file_download_outlined,
-                      color: getAccentColor().lighter,
+      body: Stack(
+        children: [
+          Center(
+            child: SizedBox(
+              width: MediaQuery.of(context).size.width,
+              height: MediaQuery.of(context).size.height,
+              child: MaterialDesktopVideoControlsTheme(
+                normal: MaterialDesktopVideoControlsThemeData(
+                  keyboardShortcuts: keyboardShortcuts(context),
+                  seekBarThumbColor: getAccentColor().light,
+                  seekBarPositionColor: getAccentColor().lighter,
+                  toggleFullscreenOnDoublePress: false,
+                  topButtonBar: [Expanded(child: _buildTopBar())],
+                  bottomButtonBar: [
+                    MaterialDesktopPlayOrPauseButton(
+                      iconColor: getAccentColor().lighter,
                     ),
-                    iconSize: 24.0,
-                    onPressed: _saveGame,
-                  ),
-                ),
-                Tooltip(
-                  message: '加载存档',
-                  useMousePosition: false,
-                  style: TooltipThemeData(textStyle: textStyle),
-                  child: MaterialDesktopCustomButton(
-                    icon: Icon(
-                      Icons.file_upload_outlined,
-                      color: getAccentColor().lighter,
-                    ),
-                    iconSize: 24.0,
-                    onPressed: _loadGame,
-                  ),
-                ),
-                Spacer(),
-                MaterialDesktopCustomButton(
-                  icon: ValueListenableBuilder<String>(
-                    valueListenable: selectedSpeedNotifier,
-                    builder: (context, speed, child) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            height: 24.0,
-                            alignment: Alignment.center,
-                            child: Text(speed, style: textStyle),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  iconSize: 24.0,
-                  onPressed: () {
-                    final currentIndex = speedOptions.indexOf(
-                      selectedSpeedNotifier.value,
-                    );
-                    final nextIndex = (currentIndex + 1) % speedOptions.length;
-                    selectedSpeedNotifier.value = speedOptions[nextIndex];
-                    _player.setRate(
-                      double.parse(
-                        selectedSpeedNotifier.value.replaceAll('x', ''),
+                    MaterialDesktopPositionIndicator(style: textStyle),
+                    Spacer(),
+                    Tooltip(
+                      message: '保存游戏',
+                      useMousePosition: false,
+                      style: TooltipThemeData(textStyle: textStyle),
+                      child: MaterialDesktopCustomButton(
+                        icon: Icon(
+                          Icons.file_download_outlined,
+                          color: getAccentColor().lighter,
+                        ),
+                        iconSize: 24.0,
+                        onPressed: _saveGame,
                       ),
-                    );
-                  },
+                    ),
+                    Tooltip(
+                      message: '加载存档',
+                      useMousePosition: false,
+                      style: TooltipThemeData(textStyle: textStyle),
+                      child: MaterialDesktopCustomButton(
+                        icon: Icon(
+                          Icons.file_upload_outlined,
+                          color: getAccentColor().lighter,
+                        ),
+                        iconSize: 24.0,
+                        onPressed: _loadGame,
+                      ),
+                    ),
+                    Spacer(),
+                    MaterialDesktopCustomButton(
+                      icon: ValueListenableBuilder<String>(
+                        valueListenable: selectedSpeedNotifier,
+                        builder: (context, speed, child) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                height: 24.0,
+                                alignment: Alignment.center,
+                                child: Text(speed, style: textStyle),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      iconSize: 24.0,
+                      onPressed: () {
+                        final currentIndex = speedOptions.indexOf(
+                          selectedSpeedNotifier.value,
+                        );
+                        final nextIndex =
+                            (currentIndex + 1) % speedOptions.length;
+                        selectedSpeedNotifier.value = speedOptions[nextIndex];
+                        _player.setRate(
+                          double.parse(
+                            selectedSpeedNotifier.value.replaceAll('x', ''),
+                          ),
+                        );
+                      },
+                    ),
+                    MaterialDesktopVolumeButton(
+                      iconColor: getAccentColor().lighter,
+                    ),
+                    Tooltip(
+                      message: '全屏',
+                      useMousePosition: false,
+                      style: TooltipThemeData(textStyle: textStyle),
+                      child: MaterialDesktopCustomButton(
+                        icon: Icon(
+                          Icons.fullscreen,
+                          color: getAccentColor().lighter,
+                        ),
+                        iconSize: 24.0,
+                        onPressed: _toggleFullscreen,
+                      ),
+                    ),
+                  ],
                 ),
-                MaterialDesktopVolumeButton(
-                  iconColor: getAccentColor().lighter,
+                fullscreen: MaterialDesktopVideoControlsThemeData(
+                  keyboardShortcuts: keyboardShortcuts(context),
+                  seekBarThumbColor: getAccentColor().light,
+                  seekBarPositionColor: getAccentColor().lighter,
+                  toggleFullscreenOnDoublePress: true,
+                  topButtonBar: [Expanded(child: _buildTopBar())],
+                  bottomButtonBar: [
+                    MaterialDesktopPlayOrPauseButton(
+                      iconColor: getAccentColor().lighter,
+                    ),
+                    MaterialDesktopPositionIndicator(style: textStyle),
+                    Spacer(),
+                    Tooltip(
+                      message: '保存游戏',
+                      useMousePosition: false,
+                      style: TooltipThemeData(textStyle: textStyle),
+                      child: MaterialDesktopCustomButton(
+                        icon: Icon(
+                          Icons.file_download_outlined,
+                          color: getAccentColor().lighter,
+                        ),
+                        iconSize: 24.0,
+                        onPressed: _saveGame,
+                      ),
+                    ),
+                    Tooltip(
+                      message: '加载存档',
+                      useMousePosition: false,
+                      style: TooltipThemeData(textStyle: textStyle),
+                      child: MaterialDesktopCustomButton(
+                        icon: Icon(
+                          Icons.file_upload_outlined,
+                          color: getAccentColor().lighter,
+                        ),
+                        iconSize: 24.0,
+                        onPressed: _loadGame,
+                      ),
+                    ),
+                    Spacer(),
+                    MaterialDesktopCustomButton(
+                      icon: ValueListenableBuilder<String>(
+                        valueListenable: selectedSpeedNotifier,
+                        builder: (context, speed, child) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                height: 24.0,
+                                alignment: Alignment.center,
+                                child: Text(speed, style: textStyle),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      iconSize: 24.0,
+                      onPressed: () {
+                        final currentIndex = speedOptions.indexOf(
+                          selectedSpeedNotifier.value,
+                        );
+                        final nextIndex =
+                            (currentIndex + 1) % speedOptions.length;
+                        selectedSpeedNotifier.value = speedOptions[nextIndex];
+                        _player.setRate(
+                          double.parse(
+                            selectedSpeedNotifier.value.replaceAll('x', ''),
+                          ),
+                        );
+                      },
+                    ),
+                    MaterialDesktopVolumeButton(
+                      iconColor: getAccentColor().lighter,
+                    ),
+                    Tooltip(
+                      message: '退出全屏',
+                      useMousePosition: false,
+                      style: TooltipThemeData(textStyle: textStyle),
+                      child: MaterialDesktopCustomButton(
+                        icon: Icon(
+                          Icons.fullscreen_exit,
+                          color: getAccentColor().lighter,
+                        ),
+                        iconSize: 24.0,
+                        onPressed: _toggleFullscreen,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            fullscreen: const MaterialDesktopVideoControlsThemeData(),
-            child: Scaffold(
-              body: Stack(
-                children: [
-                  Video(wakelock: false, controller: _controller),
-                  if (_showChoiceOverlay) _buildChoiceOverlay(),
-                ],
+                child: Scaffold(
+                  body: Video(wakelock: false, controller: _controller),
+                ),
               ),
             ),
           ),
-        ),
+          if (_showChoiceOverlay) _buildChoiceOverlay(),
+        ],
       ),
     );
   }

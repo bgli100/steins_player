@@ -16,6 +16,7 @@ import 'utils.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  await Update.getAppVersion();
   await Signup.readUsername();
 
   if (Platform.isWindows) {

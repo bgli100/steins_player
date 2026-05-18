@@ -1,10 +1,16 @@
 import 'dart:convert';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class Update {
-  static final String currentVersion = '0.3.4';
+  static String currentVersion = '';
+
+  static Future<void> getAppVersion() async {
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    currentVersion = packageInfo.version;
+  }
 
   TextStyle get textStyle =>
       TextStyle(fontSize: 18, fontFamily: "Microsoft YaHei UI");

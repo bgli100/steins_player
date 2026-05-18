@@ -32,12 +32,12 @@ class Signup {
     debugPrint("loaded from ${file.path}, data $data");
   }
 
-  static void showSignupDialog(BuildContext context) {
+  static Future<void> showSignupDialog(BuildContext context) {
     String tempUsername = currentUsername;
     String? errorMessage;
     final controller = TextEditingController(text: currentUsername);
 
-    showDialog(
+    return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
