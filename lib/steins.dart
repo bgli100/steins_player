@@ -68,11 +68,11 @@ class Steins {
       if (node != null && node['type'] == 'exit') {
         exit(0);
       }
-      if (node == null || node['type'] == 'leaf') {
+      if (node == null || node['type'] == 'leaf' || node['type'] == 'choice') {
         return null;
       }
       _randomizeRandomVars();
-      return _currentState();
+      return currentState();
     }
 
     if (node != null && node['type'] == 'choice') {
@@ -93,7 +93,7 @@ class Steins {
       'proceed with action: $actionLetter, new pos: $pos, vars: $vars',
     );
     _randomizeRandomVars();
-    return _currentState();
+    return currentState();
   }
 
   void _advanceDirectNodeOnce(Map<String, dynamic> node) {
@@ -107,7 +107,7 @@ class Steins {
     }
   }
 
-  Map<String, dynamic> _currentState() {
+  Map<String, dynamic> currentState() {
     final node = _getCurrentNode();
     final state = <String, dynamic>{
       'pos': pos,
@@ -171,7 +171,7 @@ class Steins {
       vars
         ..clear()
         ..addAll(newVars);
-      return _currentState();
+      return currentState();
     } catch (_) {
       return null;
     }

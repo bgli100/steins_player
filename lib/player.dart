@@ -76,8 +76,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> _initPlayer() async {
     steins = await Steins.create(widget.type);
-    final state = steins.proceed(null);
-    if (state != null) _updateState(state);
+    final state = steins.currentState();
+    _updateState(state);
     await _player.open(
       Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
     );
@@ -277,7 +277,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 if (!paused) {
                   await _player.pause();
                 }
-                await Signup.showSignupDialog(context);
+                await (() async {
+                  if (context.mounted) {
+                    await Signup.showSignupDialog(context);
+                  }
+                })();
                 if (!paused) {
                   await _player.play();
                 }
