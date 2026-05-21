@@ -6,7 +6,7 @@ import 'package:flutter/material.dart' show Icons, Scaffold;
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:file_selector/file_selector.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:media_kit_video/media_kit_video_controls/src/controls/extensions/duration.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:intl/intl.dart';
@@ -29,9 +29,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final _controller = VideoController(_player);
   late final StreamSubscription<bool> _completedSubscription;
   late final Steins steins;
-  late int pos;
+  int pos = 1;
   late int cid;
-  late String title;
+  String title = '';
   TextStyle get textStyle => TextStyle(
     color: getAccentColor().lighter,
     fontSize: 14,
@@ -150,11 +150,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!isPaused) {
       await _player.pause();
     }
-    final location = await getSaveLocation(
-      suggestedName: suggestedName,
-      acceptedTypeGroups: [
-        XTypeGroup(label: 'JSON', extensions: ['json']),
-      ],
+    final location = await FilePicker.platform.saveFile(
+      dialogTitle: '保存游戏',
+      fileName: suggestedName,
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      lockParentWindow: true,
     );
     if (location == null) {
       if (!isPaused) {
@@ -162,8 +163,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       return;
     }
-    await steins.save(location.path);
-    debugPrint('Saved game to: ${location.path}');
+    await steins.save(location);
+    debugPrint('Saved game to: $location');
     if (!isPaused) {
       await _player.play();
     }
@@ -174,20 +175,26 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!isPaused) {
       await _player.pause();
     }
-    final files = await openFiles(
-      acceptedTypeGroups: [
-        XTypeGroup(label: 'JSON', extensions: ['json']),
-      ],
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      lockParentWindow: true,
     );
 
-    if (files.isEmpty) {
+    if (result == null || result.files.isEmpty) {
       if (!isPaused) {
         await _player.play();
       }
       return;
     }
-    final file = files.first;
-    final state = await steins.load(file.path);
+    final file = result.files.first;
+    if (file.path == null) {
+      if (!isPaused) {
+        await _player.play();
+      }
+      return;
+    }
+    final state = await steins.load(file.path!);
     if (state == null) {
       debugPrint('Failed to load game: ${file.path}');
       if (!isPaused) {
