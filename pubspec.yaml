@@ -1,7 +1,7 @@
 name: steins_player
 description: "Steins Player"
 publish_to: 'none'
-version: 0.3.7
+version: 1.0.0
 
 environment:
   sdk: ^3.9.2
@@ -18,7 +18,10 @@ dependencies:
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
-  file_picker: ^8.1.7
+  file_picker_ohos:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_file_picker.git
+      ref: br_v10.3.8_ohos
   window_manager: ^0.5.1
   http: ^1.6.0
   url_launcher: ^6.3.2
@@ -26,6 +29,48 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
   package_info_plus: ^9.0.1
+
+dependency_overrides:
+  media_kit:
+    git:
+      url: https://github.com/cnoim/media-kit.git
+      ref: feat-ohos
+      path: ./media_kit
+  media_kit_video:
+    git:
+      url: https://github.com/cnoim/media-kit.git
+      ref: feat-ohos
+      path: ./media_kit_video
+  media_kit_libs_video:
+    git:
+      url: https://github.com/cnoim/media-kit.git
+      ref: feat-ohos
+      path: ./libs/universal/media_kit_libs_video
+  media_kit_libs_ohos:
+    git:
+      url: https://github.com/cnoim/media-kit.git
+      ref: feat-ohos
+      path: ./libs/ohos/media_kit_libs_ohos
+  window_manager:
+    git:
+      url: https://github.com/bggRGjQaUbCoE/window_manager.git
+      ref: main
+      path: packages/window_manager
+  path_provider:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_packages.git
+      ref: br_path_provider-v2.1.5_ohos
+      path: packages/path_provider/path_provider
+  url_launcher:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_packages.git
+      ref: br_url_launcher-v6.3.2_ohos
+      path: packages/url_launcher/url_launcher
+  package_info_plus:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_plus_plugins.git
+      ref: br_package_info_plus-v9.0.0_ohos
+      path: packages/package_info_plus/package_info_plus
 
 dev_dependencies:
   flutter_test:
@@ -38,6 +83,8 @@ flutter_launcher_icons:
     generate: true
     image_path: "res/icon.png"
     icon_size: 256
+  android: true
+  image_path_android: "res/icon.png"
 
 flutter:
   uses-material-design: true

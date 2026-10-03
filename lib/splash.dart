@@ -3,6 +3,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import 'main.dart';
+import 'utils.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -19,7 +20,9 @@ class _SplashPageState extends State<SplashPage> {
   void initState() {
     super.initState();
     player.setVolume(100.0);
-    player.open(Media('asset:///res/global/loading.mp4'));
+    Utils.mediaUri(
+      'res/global/loading.mp4',
+    ).then((uri) => player.open(Media(uri)));
     player.stream.completed.listen((completed) {
       if (completed) {
         player.stop();
@@ -47,6 +50,7 @@ class _SplashPageState extends State<SplashPage> {
       wakelock: false,
       controller: controller,
       controls: NoVideoControls,
+      fit: Utils.backgroundVideoFit,
     );
   }
 }

@@ -72,7 +72,15 @@ class Update {
           ),
           FilledButton(
             onPressed: () async {
-              await launchUrl(Uri.parse(downloadUrl));
+              try {
+                // HarmonyOS needs the external mode to hand the link to a browser.
+                await launchUrl(
+                  Uri.parse(downloadUrl),
+                  mode: LaunchMode.externalApplication,
+                );
+              } catch (error) {
+                debugPrint('Failed to open $downloadUrl: $error');
+              }
               if (context.mounted) {
                 Navigator.of(context).pop();
               }

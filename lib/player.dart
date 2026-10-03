@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
@@ -6,7 +7,7 @@ import 'package:flutter/material.dart' show Icons, Scaffold;
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_picker_ohos/file_picker_ohos.dart';
 import 'package:media_kit_video/media_kit_video_controls/src/controls/extensions/duration.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:intl/intl.dart';
@@ -40,12 +41,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   late Map<String, String> _currentChoiceOptions = {};
   bool _showChoiceOverlay = false;
+  bool _playingBeforeBackground = false;
 
   late final ValueNotifier<String> selectedSpeedNotifier;
   late final ValueNotifier<bool> fullyLoadedNotifier = ValueNotifier(false);
   late final ValueNotifier<String> usernameNotifier;
-  late final ValueNotifier<bool> isFullscreenNotifier = ValueNotifier(false);
+  late final ValueNotifier<bool> isFullscreenNotifier = ValueNotifier(
+    Platform.isAndroid,
+  );
   final List<String> speedOptions = ['0.5x', '1.0x', '1.5x', '2.0x'];
+  static const MethodChannel _saveFileChannel = MethodChannel(
+    'lullaby/save_file',
+  );
 
   @override
   void initState() {
@@ -70,6 +77,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// The video output is torn down while the app is in the background, so a
+  /// playing video has to be restarted when the app comes back.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _playingBeforeBackground = _player.state.playing;
+    } else if (state == AppLifecycleState.resumed && _playingBeforeBackground) {
+      _playingBeforeBackground = false;
+      _player.play();
+    }
+  }
+
   AccentColor getAccentColor() {
     return Utils.getAccentColorForType(widget.type);
   }
@@ -79,7 +99,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final state = steins.currentState();
     _updateState(state);
     await _player.open(
-      Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
+      Media(await Utils.mediaUri('res/works/${widget.type}/segments/$cid.mp4')),
     );
     _completedSubscription = _player.stream.completed.listen((completed) async {
       if (completed) {
@@ -130,7 +150,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     _updateState(state);
     await _player.open(
-      Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
+      Media(await Utils.mediaUri('res/works/${widget.type}/segments/$cid.mp4')),
     );
   }
 
@@ -150,20 +170,58 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!isPaused) {
       await _player.pause();
     }
-    final location = await FilePicker.platform.saveFile(
-      dialogTitle: '保存游戏',
-      fileName: suggestedName,
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-      lockParentWindow: true,
-    );
+    String? location;
+    try {
+      if (Platform.isWindows) {
+        location = await FilePicker.platform.saveFile(
+          dialogTitle: '保存游戏',
+          fileName: suggestedName,
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+          lockParentWindow: true,
+        );
+        if (location != null) await steins.save(location);
+      } else if (Platform.isOhos) {
+        // `file_picker` drops the payload of save() on HarmonyOS, so the
+        // system picker is driven by the native channel instead.
+        location = await _saveFileChannel.invokeMethod<String>('save', {
+          'fileName': suggestedName,
+          'bytes': Uint8List.fromList(utf8.encode(steins.encodeSaveData())),
+        });
+      } else {
+        // Mobile pickers only take a save location together with the data.
+        location = await FilePicker.platform.saveFile(
+          dialogTitle: '保存游戏',
+          fileName: suggestedName,
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+          bytes: Uint8List.fromList(utf8.encode(steins.encodeSaveData())),
+        );
+      }
+    } catch (error) {
+      debugPrint('Failed to save game: $error');
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => ContentDialog(
+            title: const Text('保存失败'),
+            content: Text('$error', style: const TextStyle(fontSize: 16)),
+            actions: [
+              Button(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
     if (location == null) {
       if (!isPaused) {
         await _player.play();
       }
       return;
     }
-    await steins.save(location);
     debugPrint('Saved game to: $location');
     if (!isPaused) {
       await _player.play();
@@ -204,7 +262,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     _updateState(state);
     await _player.open(
-      Media('asset:///res/works/${widget.type}/segments/$cid.mp4'),
+      Media(await Utils.mediaUri('res/works/${widget.type}/segments/$cid.mp4')),
       play: !isPaused,
     );
     debugPrint('Loaded game from: ${file.path}');
@@ -224,10 +282,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> _toggleFullscreen() async {
     isFullscreenNotifier.value = !isFullscreenNotifier.value;
-    if (isFullscreenNotifier.value) {
-      await windowManager.setFullScreen(true);
-    } else {
-      await windowManager.setFullScreen(false);
+    if (Platform.isWindows) {
+      await windowManager.setFullScreen(isFullscreenNotifier.value);
+    } else if (Platform.isAndroid) {
+      await SystemChrome.setEnabledSystemUIMode(
+        isFullscreenNotifier.value
+            ? SystemUiMode.immersiveSticky
+            : SystemUiMode.edgeToEdge,
+      );
     }
   }
 
@@ -295,14 +357,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               },
             ),
             Expanded(
-              child: DragToMoveArea(
+              child: Utils.dragToMoveArea(
                 child: Container(color: Colors.transparent),
               ),
             ),
-            MaterialDesktopCustomButton(
-              onPressed: () => exit(0),
-              icon: Icon(Icons.close, color: getAccentColor().lighter),
-            ),
+            if (Platform.isWindows)
+              MaterialDesktopCustomButton(
+                onPressed: () => Utils.exitApp(),
+                icon: Icon(Icons.close, color: getAccentColor().lighter),
+              ),
           ],
         ),
       ],
@@ -310,75 +373,79 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Widget _buildChoiceOverlay() {
+    final insets = Utils.systemInsets(context);
     return Positioned.fill(
       child: Container(
         color: Colors.black.withValues(alpha: .25),
-        child: Column(
-          children: [
-            Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              decoration: BoxDecoration(color: Colors.transparent),
-              child: _buildTopBar(),
-            ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 24.0,
+        child: Padding(
+          padding: insets.copyWith(top: 0),
+          child: Column(
+            children: [
+              Container(
+                height: 56 + insets.top,
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                decoration: BoxDecoration(color: Colors.transparent),
+                child: _buildTopBar(),
               ),
-              child: Row(
-                children: List.generate(4, (index) {
-                  final letter = String.fromCharCode(65 + index);
-                  final text = _currentChoiceOptions[letter];
-                  if (text == null) {
-                    return const Expanded(child: SizedBox());
-                  }
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                      child: FilledButton(
-                        style: ButtonStyle(
-                          backgroundColor: WidgetStatePropertyAll<Color>(
-                            getAccentColor().lightest,
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 24.0,
+                ),
+                child: Row(
+                  children: List.generate(4, (index) {
+                    final letter = String.fromCharCode(65 + index);
+                    final text = _currentChoiceOptions[letter];
+                    if (text == null) {
+                      return const Expanded(child: SizedBox());
+                    }
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: FilledButton(
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStatePropertyAll<Color>(
+                              getAccentColor().lightest,
+                            ),
+                          ),
+                          onPressed: () async {
+                            await _onChoiceSelected(letter);
+                          },
+
+                          child: Column(
+                            mainAxisSize: MainAxisSize.max,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                letter,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: "Microsoft YaHei UI",
+                                ),
+                              ),
+                              Text(
+                                text,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                  fontFamily: "Microsoft YaHei UI",
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
-                        onPressed: () async {
-                          await _onChoiceSelected(letter);
-                        },
-
-                        child: Column(
-                          mainAxisSize: MainAxisSize.max,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              letter,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: "Microsoft YaHei UI",
-                              ),
-                            ),
-                            Text(
-                              text,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.black,
-                                fontFamily: "Microsoft YaHei UI",
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -415,8 +482,118 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     };
   }
 
+  void _cycleSpeed() {
+    final currentIndex = speedOptions.indexOf(selectedSpeedNotifier.value);
+    final nextIndex = (currentIndex + 1) % speedOptions.length;
+    selectedSpeedNotifier.value = speedOptions[nextIndex];
+    _player.setRate(
+      double.parse(selectedSpeedNotifier.value.replaceAll('x', '')),
+    );
+  }
+
+  /// `media_kit` picks the desktop controls on Windows, but the Material ones
+  /// everywhere else, so the latter are configured with the same button bars.
+  Widget _mobileControlsTheme({required Widget child}) {
+    if (Platform.isWindows) {
+      return child;
+    }
+    return MaterialVideoControlsTheme(
+      normal: _mobileThemeData(),
+      fullscreen: _mobileThemeData(),
+      child: child,
+    );
+  }
+
+  MaterialVideoControlsThemeData _mobileThemeData() {
+    final insets = Utils.systemInsets(context);
+    return MaterialVideoControlsThemeData(
+      padding: insets == EdgeInsets.zero ? null : insets,
+      primaryButtonBar: const [],
+      topButtonBar: [Expanded(child: _buildTopBar())],
+      // Keep every button clear of the corners, where phones may cut out a
+      // camera hole.
+      topButtonBarMargin: const EdgeInsets.symmetric(horizontal: 40.0),
+      bottomButtonBarMargin: const EdgeInsets.symmetric(horizontal: 40.0),
+      bottomButtonBar: [
+        Expanded(
+          child: Row(
+            children: [
+              MaterialPlayOrPauseButton(
+                iconSize: 24.0,
+                iconColor: getAccentColor().lighter,
+              ),
+              MaterialPositionIndicator(style: textStyle),
+            ],
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Tooltip(
+              message: '保存游戏',
+              useMousePosition: false,
+              style: TooltipThemeData(textStyle: textStyle),
+              child: MaterialCustomButton(
+                icon: Icon(
+                  Icons.file_download_outlined,
+                  color: getAccentColor().lighter,
+                ),
+                iconSize: 24.0,
+                onPressed: _saveGame,
+              ),
+            ),
+            Tooltip(
+              message: '加载存档',
+              useMousePosition: false,
+              style: TooltipThemeData(textStyle: textStyle),
+              child: MaterialCustomButton(
+                icon: Icon(
+                  Icons.file_upload_outlined,
+                  color: getAccentColor().lighter,
+                ),
+                iconSize: 24.0,
+                onPressed: _loadGame,
+              ),
+            ),
+          ],
+        ),
+        Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              MaterialCustomButton(
+                icon: ValueListenableBuilder<String>(
+                  valueListenable: selectedSpeedNotifier,
+                  builder: (context, speed, child) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          height: 24.0,
+                          alignment: Alignment.center,
+                          child: Text(speed, style: textStyle),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                iconSize: 24.0,
+                onPressed: _cycleSpeed,
+              ),
+            ],
+          ),
+        ),
+      ],
+      // Keep the seek bar just above the button bar instead of the screen edge.
+      seekBarMargin: const EdgeInsets.only(bottom: 60.0),
+      seekBarPositionColor: getAccentColor().lighter,
+      seekBarThumbColor: getAccentColor().light,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final insets = Utils.systemInsets(context);
     return Scaffold(
       body: Stack(
         children: [
@@ -424,185 +601,167 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             child: SizedBox(
               width: MediaQuery.of(context).size.width,
               height: MediaQuery.of(context).size.height,
-              child: MaterialDesktopVideoControlsTheme(
-                normal: MaterialDesktopVideoControlsThemeData(
-                  keyboardShortcuts: keyboardShortcuts(context),
-                  seekBarThumbColor: getAccentColor().light,
-                  seekBarPositionColor: getAccentColor().lighter,
-                  toggleFullscreenOnDoublePress: false,
-                  topButtonBar: [Expanded(child: _buildTopBar())],
-                  bottomButtonBar: [
-                    MaterialDesktopPlayOrPauseButton(
-                      iconColor: getAccentColor().lighter,
-                    ),
-                    MaterialDesktopPositionIndicator(style: textStyle),
-                    Spacer(),
-                    Tooltip(
-                      message: '保存游戏',
-                      useMousePosition: false,
-                      style: TooltipThemeData(textStyle: textStyle),
-                      child: MaterialDesktopCustomButton(
-                        icon: Icon(
-                          Icons.file_download_outlined,
-                          color: getAccentColor().lighter,
-                        ),
-                        iconSize: 24.0,
-                        onPressed: _saveGame,
+              child: _mobileControlsTheme(
+                child: MaterialDesktopVideoControlsTheme(
+                  normal: MaterialDesktopVideoControlsThemeData(
+                    padding: insets == EdgeInsets.zero ? null : insets,
+                    keyboardShortcuts: keyboardShortcuts(context),
+                    seekBarThumbColor: getAccentColor().light,
+                    seekBarPositionColor: getAccentColor().lighter,
+                    toggleFullscreenOnDoublePress: false,
+                    topButtonBar: [Expanded(child: _buildTopBar())],
+                    bottomButtonBar: [
+                      MaterialDesktopPlayOrPauseButton(
+                        iconColor: getAccentColor().lighter,
                       ),
-                    ),
-                    Tooltip(
-                      message: '加载存档',
-                      useMousePosition: false,
-                      style: TooltipThemeData(textStyle: textStyle),
-                      child: MaterialDesktopCustomButton(
-                        icon: Icon(
-                          Icons.file_upload_outlined,
-                          color: getAccentColor().lighter,
-                        ),
-                        iconSize: 24.0,
-                        onPressed: _loadGame,
-                      ),
-                    ),
-                    Spacer(),
-                    MaterialDesktopCustomButton(
-                      icon: ValueListenableBuilder<String>(
-                        valueListenable: selectedSpeedNotifier,
-                        builder: (context, speed, child) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                height: 24.0,
-                                alignment: Alignment.center,
-                                child: Text(speed, style: textStyle),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                      iconSize: 24.0,
-                      onPressed: () {
-                        final currentIndex = speedOptions.indexOf(
-                          selectedSpeedNotifier.value,
-                        );
-                        final nextIndex =
-                            (currentIndex + 1) % speedOptions.length;
-                        selectedSpeedNotifier.value = speedOptions[nextIndex];
-                        _player.setRate(
-                          double.parse(
-                            selectedSpeedNotifier.value.replaceAll('x', ''),
+                      MaterialDesktopPositionIndicator(style: textStyle),
+                      Spacer(),
+                      Tooltip(
+                        message: '保存游戏',
+                        useMousePosition: false,
+                        style: TooltipThemeData(textStyle: textStyle),
+                        child: MaterialDesktopCustomButton(
+                          icon: Icon(
+                            Icons.file_download_outlined,
+                            color: getAccentColor().lighter,
                           ),
-                        );
-                      },
-                    ),
-                    MaterialDesktopVolumeButton(
-                      iconColor: getAccentColor().lighter,
-                    ),
-                    Tooltip(
-                      message: '全屏',
-                      useMousePosition: false,
-                      style: TooltipThemeData(textStyle: textStyle),
-                      child: MaterialDesktopCustomButton(
-                        icon: Icon(
-                          Icons.fullscreen,
-                          color: getAccentColor().lighter,
+                          iconSize: 24.0,
+                          onPressed: _saveGame,
                         ),
-                        iconSize: 24.0,
-                        onPressed: _toggleFullscreen,
                       ),
-                    ),
-                  ],
-                ),
-                fullscreen: MaterialDesktopVideoControlsThemeData(
-                  keyboardShortcuts: keyboardShortcuts(context),
-                  seekBarThumbColor: getAccentColor().light,
-                  seekBarPositionColor: getAccentColor().lighter,
-                  toggleFullscreenOnDoublePress: true,
-                  topButtonBar: [Expanded(child: _buildTopBar())],
-                  bottomButtonBar: [
-                    MaterialDesktopPlayOrPauseButton(
-                      iconColor: getAccentColor().lighter,
-                    ),
-                    MaterialDesktopPositionIndicator(style: textStyle),
-                    Spacer(),
-                    Tooltip(
-                      message: '保存游戏',
-                      useMousePosition: false,
-                      style: TooltipThemeData(textStyle: textStyle),
-                      child: MaterialDesktopCustomButton(
-                        icon: Icon(
-                          Icons.file_download_outlined,
-                          color: getAccentColor().lighter,
-                        ),
-                        iconSize: 24.0,
-                        onPressed: _saveGame,
-                      ),
-                    ),
-                    Tooltip(
-                      message: '加载存档',
-                      useMousePosition: false,
-                      style: TooltipThemeData(textStyle: textStyle),
-                      child: MaterialDesktopCustomButton(
-                        icon: Icon(
-                          Icons.file_upload_outlined,
-                          color: getAccentColor().lighter,
-                        ),
-                        iconSize: 24.0,
-                        onPressed: _loadGame,
-                      ),
-                    ),
-                    Spacer(),
-                    MaterialDesktopCustomButton(
-                      icon: ValueListenableBuilder<String>(
-                        valueListenable: selectedSpeedNotifier,
-                        builder: (context, speed, child) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                height: 24.0,
-                                alignment: Alignment.center,
-                                child: Text(speed, style: textStyle),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                      iconSize: 24.0,
-                      onPressed: () {
-                        final currentIndex = speedOptions.indexOf(
-                          selectedSpeedNotifier.value,
-                        );
-                        final nextIndex =
-                            (currentIndex + 1) % speedOptions.length;
-                        selectedSpeedNotifier.value = speedOptions[nextIndex];
-                        _player.setRate(
-                          double.parse(
-                            selectedSpeedNotifier.value.replaceAll('x', ''),
+                      Tooltip(
+                        message: '加载存档',
+                        useMousePosition: false,
+                        style: TooltipThemeData(textStyle: textStyle),
+                        child: MaterialDesktopCustomButton(
+                          icon: Icon(
+                            Icons.file_upload_outlined,
+                            color: getAccentColor().lighter,
                           ),
-                        );
-                      },
-                    ),
-                    MaterialDesktopVolumeButton(
-                      iconColor: getAccentColor().lighter,
-                    ),
-                    Tooltip(
-                      message: '退出全屏',
-                      useMousePosition: false,
-                      style: TooltipThemeData(textStyle: textStyle),
-                      child: MaterialDesktopCustomButton(
-                        icon: Icon(
-                          Icons.fullscreen_exit,
-                          color: getAccentColor().lighter,
+                          iconSize: 24.0,
+                          onPressed: _loadGame,
+                        ),
+                      ),
+                      Spacer(),
+                      MaterialDesktopCustomButton(
+                        icon: ValueListenableBuilder<String>(
+                          valueListenable: selectedSpeedNotifier,
+                          builder: (context, speed, child) {
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  height: 24.0,
+                                  alignment: Alignment.center,
+                                  child: Text(speed, style: textStyle),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         iconSize: 24.0,
-                        onPressed: _toggleFullscreen,
+                        onPressed: _cycleSpeed,
                       ),
-                    ),
-                  ],
-                ),
-                child: Scaffold(
-                  body: Video(wakelock: false, controller: _controller),
+                      MaterialDesktopVolumeButton(
+                        iconColor: getAccentColor().lighter,
+                      ),
+                      if (Platform.isWindows)
+                        Tooltip(
+                          message: '全屏',
+                          useMousePosition: false,
+                          style: TooltipThemeData(textStyle: textStyle),
+                          child: MaterialDesktopCustomButton(
+                            icon: Icon(
+                              Icons.fullscreen,
+                              color: getAccentColor().lighter,
+                            ),
+                            iconSize: 24.0,
+                            onPressed: _toggleFullscreen,
+                          ),
+                        ),
+                    ],
+                  ),
+                  fullscreen: MaterialDesktopVideoControlsThemeData(
+                    padding: insets == EdgeInsets.zero ? null : insets,
+                    keyboardShortcuts: keyboardShortcuts(context),
+                    seekBarThumbColor: getAccentColor().light,
+                    seekBarPositionColor: getAccentColor().lighter,
+                    toggleFullscreenOnDoublePress: Platform.isWindows,
+                    topButtonBar: [Expanded(child: _buildTopBar())],
+                    bottomButtonBar: [
+                      MaterialDesktopPlayOrPauseButton(
+                        iconColor: getAccentColor().lighter,
+                      ),
+                      MaterialDesktopPositionIndicator(style: textStyle),
+                      Spacer(),
+                      Tooltip(
+                        message: '保存游戏',
+                        useMousePosition: false,
+                        style: TooltipThemeData(textStyle: textStyle),
+                        child: MaterialDesktopCustomButton(
+                          icon: Icon(
+                            Icons.file_download_outlined,
+                            color: getAccentColor().lighter,
+                          ),
+                          iconSize: 24.0,
+                          onPressed: _saveGame,
+                        ),
+                      ),
+                      Tooltip(
+                        message: '加载存档',
+                        useMousePosition: false,
+                        style: TooltipThemeData(textStyle: textStyle),
+                        child: MaterialDesktopCustomButton(
+                          icon: Icon(
+                            Icons.file_upload_outlined,
+                            color: getAccentColor().lighter,
+                          ),
+                          iconSize: 24.0,
+                          onPressed: _loadGame,
+                        ),
+                      ),
+                      Spacer(),
+                      MaterialDesktopCustomButton(
+                        icon: ValueListenableBuilder<String>(
+                          valueListenable: selectedSpeedNotifier,
+                          builder: (context, speed, child) {
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  height: 24.0,
+                                  alignment: Alignment.center,
+                                  child: Text(speed, style: textStyle),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        iconSize: 24.0,
+                        onPressed: _cycleSpeed,
+                      ),
+                      MaterialDesktopVolumeButton(
+                        iconColor: getAccentColor().lighter,
+                      ),
+                      if (Platform.isWindows)
+                        Tooltip(
+                          message: '退出全屏',
+                          useMousePosition: false,
+                          style: TooltipThemeData(textStyle: textStyle),
+                          child: MaterialDesktopCustomButton(
+                            icon: Icon(
+                              Icons.fullscreen_exit,
+                              color: getAccentColor().lighter,
+                            ),
+                            iconSize: 24.0,
+                            onPressed: _toggleFullscreen,
+                          ),
+                        ),
+                    ],
+                  ),
+                  child: Scaffold(
+                    body: Video(wakelock: false, controller: _controller),
+                  ),
                 ),
               ),
             ),

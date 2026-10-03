@@ -1,12 +1,14 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:system_theme/system_theme.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'about.dart';
+import 'cutout.dart';
 import 'player.dart';
 import 'signup.dart';
 import 'update.dart';
@@ -18,6 +20,13 @@ void main() async {
   MediaKit.ensureInitialized();
   await Update.getAppVersion();
   await Signup.readUsername();
+
+  if (!Platform.isWindows) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
 
   if (Platform.isWindows) {
     await windowManager.ensureInitialized();
@@ -49,15 +58,7 @@ class MyApp extends StatelessWidget {
       title: 'Lullaby Core',
       theme: FluentThemeData(
         brightness: Brightness.dark,
-        accentColor: AccentColor.swatch({
-          'darkest': SystemTheme.accentColor.darkest,
-          'darker': SystemTheme.accentColor.darker,
-          'dark': SystemTheme.accentColor.dark,
-          'normal': SystemTheme.accentColor.accent,
-          'light': SystemTheme.accentColor.light,
-          'lighter': SystemTheme.accentColor.lighter,
-          'lightest': SystemTheme.accentColor.lightest,
-        }),
+        accentColor: Utils.systemAccentColor(),
       ),
       home: const SplashPage(),
     );
@@ -71,7 +72,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+class _HomePageState extends State<HomePage>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final List<String> _types = ['anon', 'soyo', 'sakiko', 'tomori', 'mutsumi'];
   late final player = Player();
   late final controller = VideoController(player);
@@ -79,6 +81,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _showFadeInOverlay = true;
 
   String? _hoveredType;
+  bool _aboutOpen = false;
 
   @override
   void initState() {
@@ -96,12 +99,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       });
     });
     player.setVolume(100.0);
-    player.open(Media('asset:///res/global/background.mp4'));
+    Utils.mediaUri(
+      'res/global/background.mp4',
+    ).then((uri) => player.open(Media(uri)));
     player.stream.completed.listen((completed) {
       if (completed) {
         player.seek(Duration.zero);
         player.play();
       }
+    });
+    WidgetsBinding.instance.addObserver(this);
+    DisplayCutOut.refresh().then((_) {
+      if (mounted) setState(() {});
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Update().checkUpdate(context);
@@ -109,106 +118,87 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
   }
 
+  /// The video output is torn down while the app is in the background, so the
+  /// background video has to be restarted when the app comes back.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_aboutOpen) {
+      player.play();
+    }
+  }
+
+  /// Rotating the phone flips which short edge carries the camera cut-out.
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    DisplayCutOut.refresh().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _fadeInController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final insets = Utils.systemInsets(context);
+    final double sideInset = math.max(insets.left, insets.right);
+    final screen = MediaQuery.sizeOf(context);
+    final bool bottomRightBlocked =
+        !Platform.isWindows && DisplayCutOut.blocksBottomRight(screen);
     return Stack(
       children: [
         Video(
           wakelock: false,
           controller: controller,
           controls: NoVideoControls,
+          fit: Utils.backgroundVideoFit,
         ),
-        NavigationPaneTheme(
-          data: NavigationPaneThemeData(backgroundColor: Colors.transparent),
-          child: NavigationView(
-            titleBar: Utils.buildTopButtonBar(context, showBack: false),
-            content: ScaffoldPage(
-              content: Stack(
-                children: [
-                  Center(
-                    child: FractionallySizedBox(
-                      widthFactor: 0.94,
-                      heightFactor: 0.94,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          double totalWidth = constraints.maxWidth;
-                          double cellWidth = (totalWidth - 32) / 3;
-                          double cellHeight = cellWidth * 9 / 16 + 8;
-                          double rowHeight = cellHeight;
-                          return Column(
-                            children: [
-                              SizedBox(
-                                height: rowHeight,
-                                child: _buildRow(0, 3, cellWidth, cellHeight),
-                              ),
-                              const SizedBox(height: 16),
-                              SizedBox(
-                                height: rowHeight,
-                                child: _buildRow(
-                                  3,
-                                  3,
-                                  cellWidth,
-                                  cellHeight,
-                                  includeEmptyLast: true,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
+        // The covers are centred on the whole window: the navigation title bar
+        // only takes space at the top, so centring them in the navigation
+        // content would push them down.
+        Positioned.fill(child: _buildGrid(context)),
+        Padding(
+          padding: EdgeInsets.only(
+            left: sideInset,
+            right: sideInset,
+            bottom: insets.bottom,
+          ),
+          child: NavigationPaneTheme(
+            data: NavigationPaneThemeData(backgroundColor: Colors.transparent),
+            child: NavigationView(
+              titleBar: Utils.buildTopButtonBar(context, showBack: false),
+              content: ScaffoldPage(
+                content: Stack(
+                  children: [
+                    if (Platform.isWindows)
+                      Positioned(
+                        right: 24,
+                        bottom: 24,
+                        child: _buildAboutBall(),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 24,
-                    bottom: 24,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.35),
-                            blurRadius: 16,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(FluentIcons.info, color: Colors.white),
-                        style: ButtonStyle(
-                          iconSize: WidgetStatePropertyAll<double>(28.0),
-                          backgroundColor: WidgetStatePropertyAll<Color>(
-                            Colors.transparent,
-                          ),
-                          padding: WidgetStatePropertyAll<EdgeInsets>(
-                            EdgeInsets.zero,
-                          ),
-                        ),
-                        onPressed: () async {
-                          player.pause();
-                          await Navigator.of(context).push(
-                            FluentPageRoute(
-                              builder: (context) => const AboutPage(),
-                            ),
-                          );
-                          player.play();
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
+        // On phones the entry button is drawn on top of the navigation view,
+        // whose page background would otherwise swallow the taps.
+        if (!Platform.isWindows)
+          Positioned(
+            right: 16,
+            // It sits in the bottom-right corner, which the covers leave free.
+            // A camera cut-out reported over that corner moves it up to the
+            // middle of the right edge, which is still clear of the covers.
+            top: bottomRightBlocked ? (screen.height - 48) / 2 : null,
+            bottom: bottomRightBlocked ? null : math.max(16, insets.bottom),
+            child: _buildAboutBall(),
+          ),
         if (_showFadeInOverlay)
           Positioned.fill(
             child: Opacity(
@@ -216,6 +206,105 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               child: Container(color: Colors.black),
             ),
           ),
+      ],
+    );
+  }
+
+  /// The round green entry button that opens the about page.
+  Widget _buildAboutBall() {
+    return Container(
+      width: Platform.isWindows ? 56 : 48,
+      height: Platform.isWindows ? 56 : 48,
+      decoration: BoxDecoration(
+        color: Colors.green,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: const Icon(FluentIcons.info, color: Colors.white),
+        style: ButtonStyle(
+          iconSize: WidgetStatePropertyAll<double>(
+            Platform.isWindows ? 28.0 : 24.0,
+          ),
+          backgroundColor: WidgetStatePropertyAll<Color>(Colors.transparent),
+          padding: WidgetStatePropertyAll<EdgeInsets>(EdgeInsets.zero),
+        ),
+        onPressed: _openAbout,
+      ),
+    );
+  }
+
+  Future<void> _openAbout() async {
+    _aboutOpen = true;
+    player.pause();
+    await Navigator.of(
+      context,
+    ).push(FluentPageRoute(builder: (context) => const AboutPage()));
+    _aboutOpen = false;
+    player.play();
+  }
+
+  /// The five work entries, sized to use as much of the available box as
+  /// possible: on phones both dimensions are filled (the covers get cropped a
+  /// little vertically), on Windows the original 16:9 sizing is kept.
+  Widget _buildGrid(BuildContext context) {
+    if (Platform.isWindows) {
+      return FractionallySizedBox(
+        widthFactor: 0.94,
+        heightFactor: 0.94,
+        child: LayoutBuilder(builder: _buildGridLayout),
+      );
+    }
+    // The grid sits at the root of the page, so it has to clear the safe area
+    // itself: the base margin, or the camera cut-out when that is wider. The
+    // same margin is used on both sides so the row stays centred on the screen.
+    final insets = Utils.systemInsets(context);
+    final double sideMargin = math.max(28, math.max(insets.left, insets.right));
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: sideMargin),
+      child: LayoutBuilder(
+        builder: (context, constraints) =>
+            _buildGridLayout(context, constraints, scale: 0.9),
+      ),
+    );
+  }
+
+  Widget _buildGridLayout(
+    BuildContext context,
+    BoxConstraints constraints, {
+    double scale = 1,
+  }) {
+    const double gap = 16;
+    double cellWidth = (constraints.maxWidth - gap * 2) / 3;
+    double cellHeight = cellWidth * 9 / 16 + 8;
+    final double maxCellHeight = (constraints.maxHeight - gap) / 2;
+    if (cellHeight > maxCellHeight) {
+      cellHeight = maxCellHeight < 0 ? 0 : maxCellHeight;
+      if (Platform.isWindows) {
+        cellWidth = cellHeight > 8 ? (cellHeight - 8) * 16 / 9 : 0;
+      }
+    }
+    cellWidth *= scale;
+    cellHeight *= scale;
+    final double rowHeight = cellHeight;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          height: rowHeight,
+          child: _buildRow(0, 3, cellWidth, cellHeight),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: rowHeight,
+          child: _buildRow(3, 3, cellWidth, cellHeight, includeEmptyLast: true),
+        ),
       ],
     );
   }
@@ -236,6 +325,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return SizedBox(width: cellWidth, child: _buildCell(type, cellHeight));
     });
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (var i = 0; i < cells.length; i++) ...[
           if (i > 0) const SizedBox(width: 16),

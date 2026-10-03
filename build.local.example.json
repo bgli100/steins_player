@@ -1,0 +1,14 @@
+{
+  "flutter": "flutter",
+  "hdc": "",
+  "device": "",
+  "ohos": {
+    "hapSignTool": "",
+    "keystore": "",
+    "keyAlias": "hokit",
+    "appCertFile": "",
+    "profileFile": "",
+    "keystorePwd": "",
+    "keyPwd": ""
+  }
+}

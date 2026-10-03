@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
+import 'utils.dart';
+
 class Steins {
   final String type;
   late final Map<String, dynamic> config;
@@ -66,7 +68,7 @@ class Steins {
         _advanceDirectNodeOnce(node);
       }
       if (node != null && node['type'] == 'exit') {
-        exit(0);
+        Utils.exitApp();
       }
       if (node == null || node['type'] == 'leaf' || node['type'] == 'choice') {
         return null;
@@ -124,10 +126,12 @@ class Steins {
     return state;
   }
 
+  String encodeSaveData() =>
+      jsonEncode(<String, dynamic>{'type': type, 'pos': pos, 'vars': vars});
+
   Future<void> save(String filePath) async {
-    final saveData = <String, dynamic>{'type': type, 'pos': pos, 'vars': vars};
     final file = File(filePath);
-    await file.writeAsString(jsonEncode(saveData));
+    await file.writeAsString(encodeSaveData());
   }
 
   Future<Map<String, dynamic>?> load(String filePath) async {

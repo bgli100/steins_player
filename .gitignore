@@ -9,6 +9,9 @@
 .idea/
 res/*
 
+# Machine specific build settings (tool paths, device, signing passwords)
+build.local.json
+
 # Flutter repo-specific
 /bin/cache/
 /bin/internal/bootstrap.bat
