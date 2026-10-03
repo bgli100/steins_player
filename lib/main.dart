@@ -150,63 +150,74 @@ class _HomePageState extends State<HomePage>
     final screen = MediaQuery.sizeOf(context);
     final bool bottomRightBlocked =
         !Platform.isWindows && DisplayCutOut.blocksBottomRight(screen);
-    return Stack(
-      children: [
-        Video(
-          wakelock: false,
-          controller: controller,
-          controls: NoVideoControls,
-          fit: Utils.backgroundVideoFit,
-        ),
-        // The covers are centred on the whole window: the navigation title bar
-        // only takes space at the top, so centring them in the navigation
-        // content would push them down.
-        Positioned.fill(child: _buildGrid(context)),
-        Padding(
-          padding: EdgeInsets.only(
-            left: sideInset,
-            right: sideInset,
-            bottom: insets.bottom,
+    return PopScope(
+      // The system back gesture on the home page leaves the app (no route is
+      // left to pop), instead of landing on the stopped loading video.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) Utils.exitApp();
+      },
+      child: Stack(
+        children: [
+          Video(
+            wakelock: false,
+            controller: controller,
+            controls: NoVideoControls,
+            fit: Utils.backgroundVideoFit,
           ),
-          child: NavigationPaneTheme(
-            data: NavigationPaneThemeData(backgroundColor: Colors.transparent),
-            child: NavigationView(
-              titleBar: Utils.buildTopButtonBar(context, showBack: false),
-              content: ScaffoldPage(
-                content: Stack(
-                  children: [
-                    if (Platform.isWindows)
-                      Positioned(
-                        right: 24,
-                        bottom: 24,
-                        child: _buildAboutBall(),
-                      ),
-                  ],
+          Padding(
+            padding: EdgeInsets.only(
+              left: sideInset,
+              right: sideInset,
+              bottom: insets.bottom,
+            ),
+            child: NavigationPaneTheme(
+              data: NavigationPaneThemeData(
+                backgroundColor: Colors.transparent,
+              ),
+              child: NavigationView(
+                titleBar: Utils.buildTopButtonBar(context, showBack: false),
+                content: ScaffoldPage(
+                  content: Stack(
+                    children: [
+                      if (Platform.isWindows)
+                        Positioned(
+                          right: 24,
+                          bottom: 24,
+                          child: _buildAboutBall(),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        // On phones the entry button is drawn on top of the navigation view,
-        // whose page background would otherwise swallow the taps.
-        if (!Platform.isWindows)
-          Positioned(
-            right: 16,
-            // It sits in the bottom-right corner, which the covers leave free.
-            // A camera cut-out reported over that corner moves it up to the
-            // middle of the right edge, which is still clear of the covers.
-            top: bottomRightBlocked ? (screen.height - 48) / 2 : null,
-            bottom: bottomRightBlocked ? null : math.max(16, insets.bottom),
-            child: _buildAboutBall(),
-          ),
-        if (_showFadeInOverlay)
-          Positioned.fill(
-            child: Opacity(
-              opacity: 1.0 - _fadeInController.value,
-              child: Container(color: Colors.black),
+          // The covers are centred on the whole window: the navigation title bar
+          // only takes space at the top, so centring them in the navigation
+          // content would push them down. They are drawn above the navigation
+          // view as well, otherwise its page background swallows the taps.
+          Positioned.fill(child: _buildGrid(context)),
+          // On phones the entry button is drawn on top of everything, including
+          // the covers it sits next to.
+          if (!Platform.isWindows)
+            Positioned(
+              right: 16,
+              // It sits in the bottom-right corner, which the covers leave free.
+              // A camera cut-out reported over that corner moves it up to the
+              // middle of the right edge, which is still clear of the covers.
+              top: bottomRightBlocked ? (screen.height - 48) / 2 : null,
+              bottom: bottomRightBlocked ? null : math.max(16, insets.bottom),
+              child: _buildAboutBall(),
             ),
-          ),
-      ],
+          if (_showFadeInOverlay)
+            Positioned.fill(
+              child: Opacity(
+                opacity: 1.0 - _fadeInController.value,
+                child: Container(color: Colors.black),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

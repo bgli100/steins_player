@@ -29,9 +29,12 @@ class _SplashPageState extends State<SplashPage> {
         if (!mounted) {
           return;
         }
+        // Replacing the splash keeps the home page as the root route, so the
+        // system back gesture leaves the app instead of returning to the
+        // stopped loading video.
         Navigator.of(
           context,
-        ).push(FluentPageRoute(builder: (context) => HomePage()));
+        ).pushReplacement(FluentPageRoute(builder: (context) => HomePage()));
       }
     });
   }
