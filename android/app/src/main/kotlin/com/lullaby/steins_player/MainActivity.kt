@@ -9,6 +9,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +36,38 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "isEmulator") {
+                    result.success(isEmulator())
+                } else {
+                    result.notImplemented()
+                }
+            }
+    }
+
+    /**
+     * Detects the emulators that spoof a real phone and are missed by the
+     * `Build.BRAND`/`FINGERPRINT`/`PRODUCT` based checks: MuMu reports itself
+     * as a vivo V2185A while running on an x86_64 host.
+     *
+     * Real phones are ARM, never leak an Intel/AMD CPU through /proc/cpuinfo
+     * and do not ship MuMu's emulation shim.
+     */
+    private fun isEmulator(): Boolean {
+        if (Build.SUPPORTED_ABIS.any { it.startsWith("x86") }) return true
+        if (File("/system/lib64/libandroidemu.so").exists()) return true
+        if (File("/system/lib/libandroidemu.so").exists()) return true
+        return try {
+            File("/proc/cpuinfo").useLines { lines ->
+                lines.any { line ->
+                    val value = line.lowercase()
+                    value.contains("genuineintel") || value.contains("authenticamd")
+                }
+            }
+        } catch (error: Exception) {
+            false
+        }
     }
 
     /**
@@ -62,5 +95,6 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val CUTOUT_CHANNEL = "lullaby/display_cutout"
+        const val DEVICE_CHANNEL = "lullaby/device"
     }
 }

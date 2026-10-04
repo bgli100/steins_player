@@ -12,6 +12,7 @@ import 'package:media_kit_video/media_kit_video_controls/src/controls/extensions
 import 'package:window_manager/window_manager.dart';
 import 'package:intl/intl.dart';
 
+import 'device.dart';
 import 'signup.dart';
 import 'utils.dart';
 import 'steins.dart';
@@ -27,7 +28,15 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final _player = Player();
-  late final _controller = VideoController(_player);
+  // Emulators that spoof a real phone get no usable picture out of MediaCodec's
+  // zero copy output (black video while playback runs fine), so they decode in
+  // software instead. Real devices keep hardware acceleration.
+  late final _controller = VideoController(
+    _player,
+    configuration: VideoControllerConfiguration(
+      enableHardwareAcceleration: !Device.isEmulator,
+    ),
+  );
   late final StreamSubscription<bool> _completedSubscription;
   late final Steins steins;
   int pos = 1;

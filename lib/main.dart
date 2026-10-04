@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'about.dart';
 import 'cutout.dart';
+import 'device.dart';
 import 'player.dart';
 import 'signup.dart';
 import 'update.dart';
@@ -18,6 +19,7 @@ import 'utils.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  await Device.init();
   await Update.getAppVersion();
   await Signup.readUsername();
 
