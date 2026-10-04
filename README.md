@@ -49,3 +49,23 @@ material the unsigned HAP is left in
 The HarmonyOS bundle name is `com.lullaby.steins_player.ohos`. Provisioning
 profiles are issued per bundle name, so generate a new one (DevEco Studio or
 HoKit) after renaming the bundle, otherwise `-Install` is skipped.
+
+## Update feed
+
+On start the app fetches `version.json` (see `Update.feedUrl`) and, when it
+describes a newer release, shows the notes with one button per download link:
+
+```json
+{
+  "version": "1.1.0",
+  "announcement": "release notes",
+  "download_url": "https://example.net/primary",
+  "download_name": "百度网盘",
+  "download_url2": "https://example.net/mirror",
+  "download_name2": "夸克网盘"
+}
+```
+
+`download_url2` / `download_name2` are optional: every link the feed provides
+gets its own button (`去下载` and `备用下载` are the labels used when the feed
+does not name them), and links left empty are skipped.
