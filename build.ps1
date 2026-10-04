@@ -218,7 +218,10 @@ function Find-OhosHap {
 function Remove-BuildOutputs {
     $targets = @(
         'build',
-        '.dart_tool',
+        # Only the build cache: .dart_tool\package_config.json is what the Dart
+        # analyzer resolves `package:` imports with and must survive, otherwise
+        # the IDE floods with unresolved-import errors after every build.
+        '.dart_tool\flutter_build',
         'ohos\entry\build',
         'ohos\entry\src\main\resources\rawfile\flutter_assets',
         'ohos\.hvigor',
