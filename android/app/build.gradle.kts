@@ -31,6 +31,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    androidResources {
+        // The bundle is dominated by the work videos and covers, which are
+        // already compressed. aapt2 stores these extensions by default; keeping
+        // the list explicit guards against the packer deflating ~2.7 GB of
+        // media again.
+        noCompress += listOf("mp4", "png")
+    }
 }
 
 kotlin {
