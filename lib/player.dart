@@ -27,7 +27,18 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final _player = Player();
-  late final _controller = VideoController(_player);
+  // Android decodes the work segments with MediaCodec's zero copy output when
+  // hardware acceleration is on. Emulators that spoof a real device (MuMu,
+  // which media_kit cannot detect) hand out frames that never reach the
+  // surface, leaving a black video over a perfectly healthy playback. The
+  // segments are small (720p, ~1 MBit/s), so software decoding is a safe
+  // trade-off there.
+  late final _controller = VideoController(
+    _player,
+    configuration: VideoControllerConfiguration(
+      enableHardwareAcceleration: !Platform.isAndroid,
+    ),
+  );
   late final StreamSubscription<bool> _completedSubscription;
   late final Steins steins;
   int pos = 1;
