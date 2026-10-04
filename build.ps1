@@ -312,7 +312,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "flutter_launcher_icons failed with exit code $LASTEXITCODE" }
     }
 
-    $hapSuffix = if ($OhosMode -eq 'release') { '' } else { "-$OhosMode" }
+    $hapSuffix = if ($OhosMode -eq 'release') { '-ohos' } else { "-ohos-$OhosMode" }
     $hapName = Get-PackageName $version 'hap' $hapSuffix
     $ohosHap = $null
 
@@ -393,7 +393,7 @@ try {
             'android' {
                 Publish-Artifact -Platform 'android' `
                     -Source 'build\app\outputs\flutter-apk\app-release.apk' `
-                    -Name (Get-PackageName $version 'apk' '') | Out-Null
+                    -Name (Get-PackageName $version 'apk' '-android') | Out-Null
             }
             'ohos' {
                 if ($ohosHap) {

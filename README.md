@@ -23,11 +23,12 @@ Finished artifacts are packaged into `dist\` next to the script (git-ignored,
 | Platform  | Package | Build directory (intermediate) |
 | --------- | ------- | ------------------------------ |
 | Windows   | `dist\Lullaby Core <version>-windows.zip` | `build\windows\x64\runner\Release\` |
-| Android   | `dist\Lullaby Core <version>.apk` | `build\app\outputs\flutter-apk\app-release.apk` |
-| HarmonyOS | `dist\Lullaby Core <version>.hap` | `ohos\entry\build\default\outputs\default\` |
+| Android   | `dist\Lullaby Core <version>-android.apk` | `build\app\outputs\flutter-apk\app-release.apk` |
+| HarmonyOS | `dist\Lullaby Core <version>-ohos.hap` | `ohos\entry\build\default\outputs\default\` |
 
 `<version>` comes from `pubspec.yaml`. The Windows package holds the whole
-`Release` directory (exe, libraries, `data\`).
+`Release` directory (exe, libraries, `data\`); a non-release HarmonyOS build
+carries its mode too (`Lullaby Core <version>-ohos-debug.hap`).
 
 One three-platform run leaves ~65 GB of intermediate copies behind, because the
 2.7 GB asset set is copied into every build stage (`build\flutter_assets`,
