@@ -62,6 +62,7 @@ class _AboutPageState extends State<AboutPage> {
     ('BV1zFnAzkEq5', '丰川祥子的五夜后宫', 'sakiko'),
     ('BV1qLBCB1Ej5', '高松灯的命运石之门', 'tomori'),
     ('BV1Uqo6BBEpa', '若叶睦的寓言', 'mutsumi'),
+    ('BV1GfYf6CEXU', '薇欧拉的兔子洞', 'viola'),
   ];
 
   List<Widget> _buildWorkButtons() => _works.map((work) {

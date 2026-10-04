@@ -160,6 +160,14 @@ function Invoke-Flutter([string[]]$arguments) {
     }
 }
 
+function Get-OhosBundleName {
+    $appConfig = Join-Path $root 'ohos\AppScope\app.json5'
+    if (-not (Test-Path $appConfig)) { return $null }
+    $match = [regex]::Match((Get-Content -Raw $appConfig), '"bundleName"\s*:\s*"([^"]+)"')
+    if ($match.Success) { return $match.Groups[1].Value }
+    return $null
+}
+
 function Resolve-OhosSignMaterial {
     if (-not $AppCertFile) {
         $certDir = Join-Path $env:LOCALAPPDATA 'ho-kit\sign\certs'
@@ -170,9 +178,14 @@ function Resolve-OhosSignMaterial {
     }
     if (-not $ProfileFile) {
         $profileDir = Join-Path $env:LOCALAPPDATA 'ho-kit\sign\provisions'
-        if (Test-Path $profileDir) {
-            $script:ProfileFile = (Get-ChildItem $profileDir -Filter 'com.lullaby.steins_player*.p7b' |
+        $bundleName = Get-OhosBundleName
+        if ((Test-Path $profileDir) -and $bundleName) {
+            # HoKit names the profile after the bundle: <bundle>_<account>_<hash>.p7b.
+            $script:ProfileFile = (Get-ChildItem $profileDir -Filter "$bundleName*.p7b" |
                     Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+            if (-not $ProfileFile) {
+                Write-Warning "No provisioning profile for $bundleName in $profileDir; generate one (DevEco/HoKit) or pass -ProfileFile."
+            }
         }
     }
 

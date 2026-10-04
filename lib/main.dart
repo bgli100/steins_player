@@ -74,7 +74,14 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  final List<String> _types = ['anon', 'soyo', 'sakiko', 'tomori', 'mutsumi'];
+  final List<String> _types = [
+    'anon',
+    'soyo',
+    'sakiko',
+    'tomori',
+    'mutsumi',
+    'viola',
+  ];
   late final player = Player();
   late final controller = VideoController(player);
   late AnimationController _fadeInController;

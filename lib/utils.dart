@@ -105,6 +105,17 @@ class Utils {
           'lightest': Color(0xFFE1DFDD),
         });
       case "mutsumi":
+        return Colors.green;
+      case "viola":
+        return AccentColor.swatch(const <String, Color>{
+          'darkest': Color(0xFF7A1F52),
+          'darker': Color(0xFF9C2A69),
+          'dark': Color(0xFFC03581),
+          'normal': Color(0xFFE0479B),
+          'light': Color(0xFFE96BAF),
+          'lighter': Color(0xFFF18FC4),
+          'lightest': Color(0xFFF7B3D7),
+        });
       default:
         return Colors.green;
     }

@@ -36,7 +36,7 @@ is git-ignored: copy `build.local.example.json` to create it.
 | `ohos.keystore` | signing keystore (`.p12`) |
 | `ohos.keyAlias` | key alias inside the keystore |
 | `ohos.appCertFile` | app certificate (`.cer`); auto-detected from HoKit when empty |
-| `ohos.profileFile` | provisioning profile (`.p7b`); auto-detected when empty |
+| `ohos.profileFile` | provisioning profile (`.p7b`); auto-detected for the bundle name in `ohos/AppScope/app.json5` when empty |
 | `ohos.keystorePwd` / `ohos.keyPwd` | signing passwords |
 
 Every value can also be passed as a parameter (`-Flutter`, `-Hdc`, `-Device`,
@@ -45,3 +45,7 @@ Every value can also be passed as a parameter (`-Flutter`, `-Hdc`, `-Device`,
 `$env:HOKIT_KEYSTORE_PWD` / `$env:HOKIT_KEY_PWD` for CI. Without signing
 material the unsigned HAP is left in
 `ohos\entry\build\default\outputs\default\`.
+
+The HarmonyOS bundle name is `com.lullaby.steins_player.ohos`. Provisioning
+profiles are issued per bundle name, so generate a new one (DevEco Studio or
+HoKit) after renaming the bundle, otherwise `-Install` is skipped.
