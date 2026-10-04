@@ -47,6 +47,20 @@ param(
     # Install the signed HAP on the connected HarmonyOS device via hdc.
     [switch]$Install,
 
+    # Directory the finished artifacts are packaged into, named
+    # `Lullaby Core <version>.<ext>`. Defaults to `dist` next to this script,
+    # which is git-ignored.
+    [string]$Dist = (Join-Path $PSScriptRoot 'dist'),
+
+    # Keep build\, .dart_tool\ and the OHOS build directories. They are removed
+    # once the artifacts have been packaged, because one three-platform build
+    # leaves ~65 GB of intermediate copies behind.
+    [switch]$KeepBuild,
+
+    # Package the artifacts that are already in the build directories and clean
+    # up, without running any build.
+    [switch]$PackageOnly,
+
     # File with machine specific settings (git-ignored).
     [string]$ConfigFile = (Join-Path $PSScriptRoot 'build.local.json'),
 
@@ -140,18 +154,6 @@ function Write-Header([string]$text) {
     Write-Host ('=' * 72) -ForegroundColor DarkGray
 }
 
-function Write-Result([string]$platform, [string]$path) {
-    if (Test-Path $path) {
-        $file = Get-Item $path
-        $size = '{0:N1} MB' -f ($file.Length / 1MB)
-        $results[$platform] = "OK    $($file.FullName)  ($size)"
-    }
-    else {
-        $results[$platform] = "FAIL  missing artifact: $path"
-        $script:failures += $platform
-    }
-}
-
 function Invoke-Flutter([string[]]$arguments) {
     Write-Host "> flutter $($arguments -join ' ')" -ForegroundColor DarkYellow
     & $Flutter @arguments
@@ -166,6 +168,82 @@ function Get-OhosBundleName {
     $match = [regex]::Match((Get-Content -Raw $appConfig), '"bundleName"\s*:\s*"([^"]+)"')
     if ($match.Success) { return $match.Groups[1].Value }
     return $null
+}
+
+function Get-AppVersion {
+    $pubspec = Join-Path $root 'pubspec.yaml'
+    if (Test-Path $pubspec) {
+        $match = [regex]::Match((Get-Content -Raw $pubspec), '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)')
+        if ($match.Success) { return $match.Groups[1].Value }
+    }
+    return '0.0.0'
+}
+
+# The release naming scheme used in the distribution folder.
+function Get-PackageName([string]$version, [string]$extension, [string]$suffix) {
+    return "Lullaby Core $version$suffix.$extension"
+}
+
+# Copies an artifact into $Dist under the release naming scheme and records it
+# in the build summary.
+function Publish-Artifact {
+    param([string]$Platform, [string]$Source, [string]$Name)
+    if (-not (Test-Path $Source)) {
+        Write-Warning "nothing to package for ${Platform}: $Source is missing"
+        return $null
+    }
+    New-Item -ItemType Directory -Force -Path $Dist | Out-Null
+    $target = Join-Path $Dist $Name
+    Copy-Item -Force $Source $target
+    $size = '{0:N1} MB' -f ((Get-Item $target).Length / 1MB)
+    $results[$Platform] = "OK    $target  ($size)"
+    return $target
+}
+
+# The newest HarmonyOS HAP a build left behind, preferring a signed one.
+function Find-OhosHap {
+    $candidates = @(
+        "build\ohos\hap\lullaby_core-$OhosMode-signed.hap",
+        'ohos\entry\build\default\outputs\default\entry-default-signed.hap',
+        'build\ohos\hap\entry-default-signed.hap',
+        'build\ohos\hap\entry-default-hokit-signed.hap',
+        'ohos\entry\build\default\outputs\default\entry-default-unsigned.hap'
+    ) | Where-Object { Test-Path $_ } | ForEach-Object { Get-Item $_ }
+    if (-not $candidates) { return $null }
+    return ($candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+}
+
+# Removes everything a build leaves behind; the packaged artifacts in $Dist and
+# the sources survive.
+function Remove-BuildOutputs {
+    $targets = @(
+        'build',
+        '.dart_tool',
+        'ohos\entry\build',
+        'ohos\entry\src\main\resources\rawfile\flutter_assets',
+        'ohos\.hvigor',
+        'windows\flutter\ephemeral',
+        'android\.gradle'
+    )
+    $removed = @()
+    foreach ($target in $targets) {
+        $path = Join-Path $root $target
+        if (-not (Test-Path $path)) { continue }
+        # Windows keeps handles on freshly written directories (file watchers,
+        # antivirus), so retry a few times before giving up.
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Remove-Item -Recurse -Force -Path $path -ErrorAction SilentlyContinue
+            if (-not (Test-Path $path)) { break }
+            Start-Sleep -Seconds 2
+        }
+        if (Test-Path $path) {
+            Write-Warning "could not remove $target (locked by another process; close the IDE and delete it by hand)"
+        }
+        else {
+            $removed += $target
+        }
+    }
+    return $removed
 }
 
 function Resolve-OhosSignMaterial {
@@ -216,15 +294,26 @@ function Resolve-Hdc {
 Push-Location $root
 try {
     Write-Host "Building Lullaby Core ($(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))" -ForegroundColor White
-    Write-Host "Platforms: $($Platforms -join ', ')"
+    $version = Get-AppVersion
+    if ($PackageOnly) {
+        Write-Host 'Packaging the existing artifacts only (no build).'
+    }
+    else {
+        Write-Host "Platforms: $($Platforms -join ', ')"
+    }
+    Write-Host "Version $version -> $Dist"
 
-    if (-not $SkipIcons) {
+    if (-not $PackageOnly -and -not $SkipIcons) {
         Write-Header 'Launcher icons'
         & dart run flutter_launcher_icons
         if ($LASTEXITCODE -ne 0) { throw "flutter_launcher_icons failed with exit code $LASTEXITCODE" }
     }
 
-    if ($Platforms -contains 'windows') {
+    $hapSuffix = if ($OhosMode -eq 'release') { '' } else { "-$OhosMode" }
+    $hapName = Get-PackageName $version 'hap' $hapSuffix
+    $ohosHap = $null
+
+    if (-not $PackageOnly -and ($Platforms -contains 'windows')) {
         Write-Header 'Windows release'
         Invoke-Flutter @('build', 'windows', '--release')
         $exe = 'build\windows\x64\runner\Release\lullaby_core.exe'
@@ -233,33 +322,31 @@ try {
             $legacy = 'build\windows\x64\runner\Release\steins_player.exe'
             if (Test-Path $legacy) { Move-Item -Force $legacy $exe }
         }
-        Write-Result 'windows' $exe
+        if (-not (Test-Path $exe)) { throw "Windows build did not produce $exe" }
     }
 
-    if ($Platforms -contains 'android') {
+    if (-not $PackageOnly -and ($Platforms -contains 'android')) {
         Write-Header 'Android release'
         Invoke-Flutter @('build', 'apk', '--release')
-        Write-Result 'android' 'build\app\outputs\flutter-apk\app-release.apk'
     }
 
-    if ($Platforms -contains 'ohos') {
+    if (-not $PackageOnly -and ($Platforms -contains 'ohos')) {
         Write-Header "HarmonyOS $OhosMode"
         Invoke-Flutter @('build', 'hap', "--$OhosMode")
 
         $unsignedHap = 'ohos\entry\build\default\outputs\default\entry-default-unsigned.hap'
-        $signedHap = "build\ohos\hap\lullaby_core-$OhosMode-signed.hap"
         if (-not (Test-Path $unsignedHap)) { throw "Unsigned HAP not found: $unsignedHap" }
 
         if (Resolve-OhosSignMaterial) {
             Write-Header 'Signing HarmonyOS HAP'
-            New-Item -ItemType Directory -Force -Path (Split-Path $signedHap) | Out-Null
+            New-Item -ItemType Directory -Force -Path $Dist | Out-Null
+            $ohosHap = Join-Path $Dist $hapName
             & java -jar $HapSignTool sign-app `
                 -keyAlias $KeyAlias -keyPwd $KeyPwd -keystorePwd $KeystorePwd `
                 -signCode 1 -signAlg SHA256withECDSA -mode localSign `
                 -appCertFile $AppCertFile -profileFile $ProfileFile -keystoreFile $Keystore `
-                -inFile $unsignedHap -outFile $signedHap
+                -inFile $unsignedHap -outFile $ohosHap
             if ($LASTEXITCODE -ne 0) { throw "hap-sign-tool failed with exit code $LASTEXITCODE" }
-            Write-Result 'ohos' $signedHap
 
             if ($Install) {
                 $hdc = Resolve-Hdc
@@ -270,7 +357,7 @@ try {
                     Write-Header 'Installing HarmonyOS HAP'
                     $target = @()
                     if ($Device) { $target = @('-t', $Device) }
-                    & $hdc @target install -r $signedHap
+                    & $hdc @target install -r $ohosHap
                     if ($LASTEXITCODE -ne 0) { throw "hdc install failed with exit code $LASTEXITCODE" }
                     $where = if ($Device) { "device $Device" } else { 'the connected device' }
                     $results['ohos-install'] = "OK    installed on $where"
@@ -278,7 +365,47 @@ try {
             }
         }
         else {
-            $results['ohos'] = "UNSIGNED  $((Resolve-Path $unsignedHap).Path)"
+            Write-Warning "HAP not signed with the local material; hvigor's signed copy is packaged instead."
+        }
+    }
+
+    Write-Header 'Packaging'
+    $packaged = if ($PackageOnly) { @('windows', 'android', 'ohos') } else { $Platforms }
+    foreach ($platform in $packaged) {
+        switch ($platform) {
+            'windows' {
+                $release = 'build\windows\x64\runner\Release'
+                if (-not (Test-Path (Join-Path $release 'lullaby_core.exe'))) {
+                    Write-Warning 'nothing to package for windows: build\windows\x64\runner\Release is missing'
+                    break
+                }
+                New-Item -ItemType Directory -Force -Path $Dist | Out-Null
+                $zip = Join-Path $Dist (Get-PackageName $version 'zip' '-windows')
+                if (Test-Path $zip) { Remove-Item -Force $zip }
+                # The exe needs the shipped libraries and the data directory.
+                Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zip -CompressionLevel Optimal
+                $size = '{0:N1} MB' -f ((Get-Item $zip).Length / 1MB)
+                $results['windows'] = "OK    $zip  ($size)"
+            }
+            'android' {
+                Publish-Artifact -Platform 'android' `
+                    -Source 'build\app\outputs\flutter-apk\app-release.apk' `
+                    -Name (Get-PackageName $version 'apk' '') | Out-Null
+            }
+            'ohos' {
+                if ($ohosHap) {
+                    $size = '{0:N1} MB' -f ((Get-Item $ohosHap).Length / 1MB)
+                    $results['ohos'] = "OK    $ohosHap  ($size)"
+                    break
+                }
+                $source = Find-OhosHap
+                if (-not $source) {
+                    Write-Warning 'nothing to package for ohos: no HAP found'
+                    break
+                }
+                Write-Warning "packaging $source"
+                Publish-Artifact -Platform 'ohos' -Source $source -Name $hapName | Out-Null
+            }
         }
     }
 
@@ -288,8 +415,30 @@ try {
         Write-Host ("{0,-13} {1}" -f $entry.Key, $entry.Value) -ForegroundColor $color
     }
 
+    foreach ($platform in $packaged) {
+        if ($results.Keys -contains $platform) { continue }
+        if ($PackageOnly) {
+            Write-Warning "no artifact packaged for $platform"
+        }
+        else {
+            $failures += $platform
+        }
+    }
+
     if ($failures.Count -gt 0) {
         throw "Build finished with missing artifacts: $($failures -join ', ')"
+    }
+
+    if (-not $KeepBuild) {
+        Write-Header 'Cleaning build directories'
+        $removed = Remove-BuildOutputs
+        if ($removed.Count -gt 0) {
+            Write-Host ("removed: " + ($removed -join ', ')) -ForegroundColor DarkGray
+        }
+        else {
+            Write-Host 'nothing to remove.' -ForegroundColor DarkGray
+        }
+        Write-Host 'the packaged artifacts in the distribution directory are kept (-KeepBuild keeps the rest).' -ForegroundColor DarkGray
     }
 }
 finally {
