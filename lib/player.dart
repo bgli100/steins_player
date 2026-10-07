@@ -18,6 +18,15 @@ import 'signup.dart';
 import 'utils.dart';
 import 'steins.dart';
 
+/// An empty stand-in for `media_kit`'s video controls.
+///
+/// `NoVideoControls` cannot be used to take the controls away again: it is the
+/// `null` constant and `VideoViewParameters.copyWith` keeps the previous value
+/// whenever the new one is `null`, so the *old* builder stays mounted and the
+/// controls keep drawing over the choice and ending overlays until their own
+/// auto-hide kicks in. Passing a real builder removes them.
+Widget _withoutVideoControls(VideoState state) => const SizedBox.shrink();
+
 class PlayerPage extends StatefulWidget {
   const PlayerPage({super.key, required this.type});
 
@@ -955,7 +964,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                       // While the choice or ending overlay is up the video
                       // controls would draw a second top bar over it.
                       controls: (_showChoiceOverlay || _storyEnded)
-                          ? NoVideoControls
+                          ? _withoutVideoControls
                           : AdaptiveVideoControls,
                     ),
                   ),
