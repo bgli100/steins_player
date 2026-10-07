@@ -13,6 +13,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:intl/intl.dart';
 
 import 'device.dart';
+import 'segment_watchdog.dart';
 import 'signup.dart';
 import 'utils.dart';
 import 'steins.dart';
@@ -37,7 +38,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       enableHardwareAcceleration: !Device.isEmulator,
     ),
   );
-  late final StreamSubscription<bool> _completedSubscription;
+  StreamSubscription<bool>? _completedSubscription;
   late final Steins steins;
   int pos = 1;
   late int cid;
@@ -50,7 +51,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   late Map<String, String> _currentChoiceOptions = {};
   bool _showChoiceOverlay = false;
+  bool _storyEnded = false;
   bool _playingBeforeBackground = false;
+
+  /// Set while a segment completion is being handled, so the `completed` event
+  /// and the stall watchdog cannot settle the same segment twice.
+  bool _settling = false;
+  bool _disposed = false;
+
+  /// Polls the player for progress: `media_kit`/mpv can end up "playing" while
+  /// nothing advances (a decoder that stops feeding frames), which would leave
+  /// the game waiting for a completion that never arrives.
+  Timer? _watchdog;
+  final SegmentWatchdog _stallDetector = SegmentWatchdog();
+
+  /// Top bar geometry of the player chrome, shared by the video controls and
+  /// the choice/ending overlays so the back button never moves.
+  static const double _topBarHeight = 56.0;
+  static const double _mobileTopBarMargin = 40.0;
 
   late final ValueNotifier<String> selectedSpeedNotifier;
   late final ValueNotifier<bool> fullyLoadedNotifier = ValueNotifier(false);
@@ -76,12 +94,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _disposed = true;
+    _watchdog?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     selectedSpeedNotifier.dispose();
     fullyLoadedNotifier.dispose();
     usernameNotifier.dispose();
     isFullscreenNotifier.dispose();
-    _completedSubscription.cancel();
+    // Both may be null/absent when the page is left before the player finished
+    // starting; skipping them used to leak the whole player (and its decoder).
+    _completedSubscription?.cancel();
     _player.dispose();
     super.dispose();
   }
@@ -105,19 +127,31 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> _initPlayer() async {
     steins = await Steins.create(widget.type);
+    if (_disposed) return;
     final state = steins.currentState();
-    _updateState(state);
-    await _player.open(
-      Media(await Utils.mediaUri('res/works/${widget.type}/segments/$cid.mp4')),
+    await _applyState(state);
+    _completedSubscription = _player.stream.completed.listen((completed) {
+      if (completed) _onVideoCompleted();
+    });
+    _watchdog ??= Timer.periodic(
+      _stallDetector.interval,
+      (_) => _onWatchdogTick(),
     );
-    _completedSubscription = _player.stream.completed.listen((completed) async {
-      if (completed) {
-        await _onVideoCompleted();
-      }
-    });
-    setState(() {
-      fullyLoadedNotifier.value = true;
-    });
+    debugPrint('device: emulator=${Device.isEmulator}');
+    if (!_disposed) {
+      setState(() {
+        fullyLoadedNotifier.value = true;
+      });
+    }
+  }
+
+  /// Applies a story state and starts its segment.
+  Future<void> _applyState(Map<String, dynamic>? state) async {
+    if (state == null || _disposed) {
+      return;
+    }
+    _updateState(state);
+    await _openCurrentSegment();
   }
 
   void _updateState(Map<String, dynamic> state) {
@@ -140,14 +174,61 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     setState(() {
       _currentChoiceOptions = choices;
       _showChoiceOverlay = false;
+      _storyEnded = false;
     });
   }
 
+  /// Opens the segment the story is currently on.
+  ///
+  /// [retry] marks this as the watchdog's recovery attempt, which keeps the
+  /// detector from reloading the same segment again and again.
+  Future<void> _openCurrentSegment({bool play = true, bool retry = false}) async {
+    _stallDetector.reset(retry: retry);
+    final uri = await Utils.mediaUri(
+      'res/works/${widget.type}/segments/$cid.mp4',
+    );
+    if (_disposed) return;
+    debugPrint('opening segment $cid of "$title"');
+    try {
+      await _player.open(Media(uri), play: play);
+    } catch (error) {
+      debugPrint('failed to open segment $cid: $error');
+    }
+  }
+
+  /// Settles a segment exactly once, no matter whether the completion came from
+  /// `media_kit` or from the stall watchdog.
+  Future<void> _onVideoCompleted() async {
+    if (_settling || _disposed) return;
+    _settling = true;
+    try {
+      if (_currentChoiceOptions.isNotEmpty) {
+        debugPrint('Video completed, showing choices: $_currentChoiceOptions');
+        if (!_disposed) {
+          setState(() {
+            _showChoiceOverlay = true;
+          });
+        }
+        return;
+      }
+      debugPrint('Video completed, proceeding to next segment');
+      await _proceedAndLoad(null);
+    } finally {
+      _settling = false;
+    }
+  }
+
   Future<void> _onChoiceSelected(String letter) async {
-    setState(() {
-      _showChoiceOverlay = false;
-    });
-    await _proceedAndLoad(letter);
+    if (_settling || _disposed) return;
+    _settling = true;
+    try {
+      setState(() {
+        _showChoiceOverlay = false;
+      });
+      await _proceedAndLoad(letter);
+    } finally {
+      _settling = false;
+    }
   }
 
   Future<void> _proceedAndLoad(String? actionLetter) async {
@@ -155,12 +236,52 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final state = steins.proceed(actionLetter);
     if (state == null) {
       debugPrint('No more segments to play. Ending game.');
+      if (!_disposed) {
+        setState(() {
+          _storyEnded = true;
+        });
+      }
       return;
     }
-    _updateState(state);
-    await _player.open(
-      Media(await Utils.mediaUri('res/works/${widget.type}/segments/$cid.mp4')),
+    await _applyState(state);
+  }
+
+  /// Detects a standstill: mpv reporting playback while the position does not
+  /// move. Near the end of the segment that means the completion event was
+  /// lost, so the game is settled here; elsewhere it means the pipeline died,
+  /// which a seek (or, if that fails, reloading the segment) recovers from.
+  void _onWatchdogTick() {
+    if (_disposed || _settling || _storyEnded || _showChoiceOverlay) return;
+    final state = _player.state;
+    final action = _stallDetector.tick(
+      position: state.position,
+      duration: state.duration,
+      playing: state.playing,
+      buffering: state.buffering,
     );
+    switch (action) {
+      case StallAction.none:
+        return;
+      case StallAction.settle:
+        debugPrint(
+          'watchdog: playback stopped at ${state.position} / ${state.duration}, '
+          'settling as completed',
+        );
+        _onVideoCompleted();
+      case StallAction.seek:
+        debugPrint(
+          'watchdog: playback stalled at ${state.position} / ${state.duration}, '
+          'seeking',
+        );
+        _player.seek(state.position);
+      case StallAction.reload:
+        debugPrint('watchdog: still stalled, reloading segment $cid');
+        _openCurrentSegment(retry: true);
+      case StallAction.giveUp:
+        debugPrint(
+          'watchdog: segment $cid stays stuck at ${state.position}, giving up',
+        );
+    }
   }
 
   String _defaultSaveFileName() {
@@ -270,23 +391,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       return;
     }
     _updateState(state);
-    await _player.open(
-      Media(await Utils.mediaUri('res/works/${widget.type}/segments/$cid.mp4')),
-      play: !isPaused,
-    );
+    await _openCurrentSegment(play: !isPaused);
     debugPrint('Loaded game from: ${file.path}');
-  }
-
-  Future<void> _onVideoCompleted() async {
-    if (_currentChoiceOptions.isNotEmpty) {
-      setState(() {
-        debugPrint('Video completed, showing choices: $_currentChoiceOptions');
-        _showChoiceOverlay = true;
-      });
-    } else {
-      debugPrint('Video completed, proceeding to next segment');
-      await _proceedAndLoad(null);
-    }
   }
 
   Future<void> _toggleFullscreen() async {
@@ -381,80 +487,151 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
   }
 
+  /// The player chrome the choice and ending overlays draw themselves.
+  ///
+  /// It mirrors the layout `media_kit` uses for the video controls (same
+  /// insets, height and horizontal margin), so the back button stays in one
+  /// place while playing and while choosing - otherwise both bars are on screen
+  /// at once and the corner shows two back buttons.
+  Widget _buildOverlayTopBar(EdgeInsets insets) {
+    return Padding(
+      padding: insets,
+      child: Container(
+        height: _topBarHeight,
+        margin: EdgeInsets.symmetric(
+          horizontal: Platform.isWindows ? 16.0 : _mobileTopBarMargin,
+        ),
+        child: _buildTopBar(),
+      ),
+    );
+  }
+
   Widget _buildChoiceOverlay() {
     final insets = Utils.systemInsets(context);
     return Positioned.fill(
       child: Container(
         color: Colors.black.withValues(alpha: .25),
-        child: Padding(
-          padding: insets.copyWith(top: 0),
-          child: Column(
-            children: [
-              Container(
-                height: 56 + insets.top,
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                decoration: BoxDecoration(color: Colors.transparent),
-                child: _buildTopBar(),
+        child: Column(
+          children: [
+            _buildOverlayTopBar(insets),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 24.0,
               ),
-              const Spacer(),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 24.0,
-                ),
-                child: Row(
-                  children: List.generate(4, (index) {
-                    final letter = String.fromCharCode(65 + index);
-                    final text = _currentChoiceOptions[letter];
-                    if (text == null) {
-                      return const Expanded(child: SizedBox());
-                    }
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                        child: FilledButton(
-                          style: ButtonStyle(
-                            backgroundColor: WidgetStatePropertyAll<Color>(
-                              getAccentColor().lightest,
-                            ),
-                          ),
-                          onPressed: () async {
-                            await _onChoiceSelected(letter);
-                          },
-
-                          child: Column(
-                            mainAxisSize: MainAxisSize.max,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                letter,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: "Microsoft YaHei UI",
-                                ),
-                              ),
-                              Text(
-                                text,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.black,
-                                  fontFamily: "Microsoft YaHei UI",
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+              child: Row(
+                children: List.generate(4, (index) {
+                  final letter = String.fromCharCode(65 + index);
+                  final text = _currentChoiceOptions[letter];
+                  if (text == null) {
+                    return const Expanded(child: SizedBox());
+                  }
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: FilledButton(
+                        style: ButtonStyle(
+                          backgroundColor: WidgetStatePropertyAll<Color>(
+                            getAccentColor().lightest,
                           ),
                         ),
+                        onPressed: () async {
+                          await _onChoiceSelected(letter);
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.max,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              letter,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: "Microsoft YaHei UI",
+                              ),
+                            ),
+                            Text(
+                              text,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.black,
+                                fontFamily: "Microsoft YaHei UI",
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-                  }),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shown when the story has no content left: an ending was reached or an
+  /// ending gate did not match. Without it the last frame just freezes and the
+  /// player has no idea whether the game is still working.
+  Widget _buildEndingOverlay() {
+    final insets = Utils.systemInsets(context);
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: .45),
+        child: Column(
+          children: [
+            _buildOverlayTopBar(insets),
+            const Spacer(),
+            Text(
+              '剧情已结束',
+              style: TextStyle(
+                color: getAccentColor().lighter,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                fontFamily: "Microsoft YaHei UI",
+              ),
+            ),
+            if (title.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: getAccentColor().lightest,
+                    fontSize: 14,
+                    fontFamily: "Microsoft YaHei UI",
+                  ),
                 ),
               ),
-            ],
-          ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32.0),
+              child: FilledButton(
+                style: ButtonStyle(
+                  backgroundColor: WidgetStatePropertyAll<Color>(
+                    getAccentColor().lightest,
+                  ),
+                ),
+                onPressed: () {
+                  if (context.mounted) Navigator.of(context).pop();
+                },
+                child: Text(
+                  '返回首页',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.black,
+                    fontFamily: "Microsoft YaHei UI",
+                  ),
+                ),
+              ),
+            ),
+            const Spacer(flex: 2),
+          ],
         ),
       ),
     );
@@ -520,8 +697,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       primaryButtonBar: const [],
       topButtonBar: [Expanded(child: _buildTopBar())],
       // Keep every button clear of the corners, where phones may cut out a
-      // camera hole.
-      topButtonBarMargin: const EdgeInsets.symmetric(horizontal: 40.0),
+      // camera hole. The choice and ending overlays reuse these numbers.
+      buttonBarHeight: _topBarHeight,
+      topButtonBarMargin: const EdgeInsets.symmetric(
+        horizontal: _mobileTopBarMargin,
+      ),
       bottomButtonBarMargin: const EdgeInsets.symmetric(horizontal: 40.0),
       bottomButtonBar: [
         Expanded(
@@ -769,13 +949,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     ],
                   ),
                   child: Scaffold(
-                    body: Video(wakelock: false, controller: _controller),
+                    body: Video(
+                      wakelock: false,
+                      controller: _controller,
+                      // While the choice or ending overlay is up the video
+                      // controls would draw a second top bar over it.
+                      controls: (_showChoiceOverlay || _storyEnded)
+                          ? NoVideoControls
+                          : AdaptiveVideoControls,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
           if (_showChoiceOverlay) _buildChoiceOverlay(),
+          if (_storyEnded) _buildEndingOverlay(),
         ],
       ),
     );

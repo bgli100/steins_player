@@ -24,6 +24,21 @@ class Steins {
     return steins;
   }
 
+  /// A [Steins] over already decoded data, so the story logic can be tested
+  /// without the asset bundle.
+  @visibleForTesting
+  factory Steins.fromData(
+    String type,
+    Map<String, dynamic> config,
+    Map<String, dynamic> fileData,
+  ) {
+    final steins = Steins._(type);
+    steins.config = config;
+    steins.fileData = fileData;
+    steins._initVars();
+    return steins;
+  }
+
   Future<void> _loadAssets() async {
     final configString = await rootBundle.loadString(
       'res/works/$type/config.json',
@@ -41,6 +56,10 @@ class Steins {
     config = decodedConfig;
     fileData = decodedFile;
 
+    _initVars();
+  }
+
+  void _initVars() {
     vars.clear();
 
     final rawVars = config['vars'];
@@ -78,8 +97,8 @@ class Steins {
     }
 
     if (node != null && node['type'] == 'choice') {
-      final available = _availableChoices(node);
-      final choice = available[actionLetter];
+      final options = _optionsFor(node);
+      final choice = options[actionLetter];
       if (choice != null) {
         _applyChange(choice['change']);
         final nextPos = choice['pos'];
@@ -118,7 +137,7 @@ class Steins {
     };
     if (node != null && node['type'] == 'choice') {
       state.addAll(
-        _availableChoices(
+        _optionsFor(
           node,
         ).map((key, choice) => MapEntry(key, choice['text']?.toString() ?? '')),
       );
@@ -215,6 +234,31 @@ class Steins {
     return result;
   }
 
+  /// Options the player can pick at [node].
+  ///
+  /// A condition normally decides whether an option exists. When nothing at all
+  /// is left, a *menu* (two or more declared options) is offered anyway: several
+  /// works leave a gap in their conditions (e.g. random values of 100 in a node
+  /// whose options cover 1-99), and ending the story there would drop the player
+  /// out of the branch they are on. A *gate* (a single declared option) that does
+  /// not match is a real ending - that is how the works mark an unreachable
+  /// ending - so it stays hidden and the story ends.
+  Map<String, Map<String, dynamic>> _optionsFor(Map<String, dynamic> node) {
+    final available = _availableChoices(node);
+    if (available.isNotEmpty) {
+      return available;
+    }
+    final declared = _declaredChoices(node);
+    if (declared.length > 1) {
+      debugPrint(
+        'no option matches at pos $pos, offering the ${declared.length} '
+        'declared options of ${node['title']}',
+      );
+      return declared;
+    }
+    return const {};
+  }
+
   Map<String, Map<String, dynamic>> _availableChoices(
     Map<String, dynamic> node,
   ) {
@@ -226,6 +270,24 @@ class Steins {
       }
       final candidate = entry.value;
       if (candidate is Map<String, dynamic> && _choiceIsAvailable(candidate)) {
+        result[key] = candidate;
+      }
+    }
+    return result;
+  }
+
+  /// Every option a node declares, whether its condition matches or not.
+  Map<String, Map<String, dynamic>> _declaredChoices(
+    Map<String, dynamic> node,
+  ) {
+    final result = <String, Map<String, dynamic>>{};
+    for (final entry in node.entries) {
+      final key = entry.key;
+      if (key == 'title' || key == 'cid' || key == 'type' || key == 'pos') {
+        continue;
+      }
+      final candidate = entry.value;
+      if (candidate is Map<String, dynamic>) {
         result[key] = candidate;
       }
     }
