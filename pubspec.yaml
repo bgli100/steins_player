@@ -18,10 +18,10 @@ dependencies:
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
+  # The OHOS fork of file_picker, vendored into packages/ because CocoaPods
+  # needs the podspec to be named after the package (see the README).
   file_picker_ohos:
-    git:
-      url: https://gitcode.com/CPF-Flutter/fluttertpc_file_picker.git
-      ref: br_v10.3.8_ohos
+    path: packages/file_picker_ohos
   window_manager: ^0.5.1
   http: ^1.6.0
   url_launcher: ^6.3.2

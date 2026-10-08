@@ -70,10 +70,18 @@ HoKit) after renaming the bundle, otherwise `-Install` is skipped.
 
 ## iOS
 
-The Xcode project is `ios/Runner.xcworkspace` (bundle identifier
+The iOS Xcode project is `ios/Runner.xcworkspace` (bundle identifier
 `com.lullaby.steinsplayer`, landscape only, launch screen and icons from
 `res/icon_ios.png` - an opaque 1024x1024 icon, because the transparent
 `res/icon.png` cannot be used for iOS).
+
+`packages/file_picker_ohos` is a trimmed copy of the OHOS fork of `file_picker`
+(no `example/`, `test/` or generated `oh_modules/`) with the iOS and macOS
+podspecs renamed from `file_picker.podspec` to `file_picker_ohos.podspec`,
+because CocoaPods looks for `<package name>.podspec` and the fork renamed the
+package but not its podspecs - without this every CocoaPods build (iOS and
+macOS) stops with `No podspec found for file_picker_ohos`. Keep the copy in
+sync when updating the fork.
 
 ```bash
 flutter build ios --release --no-codesign   # on macOS only
