@@ -75,6 +75,8 @@ dependency_overrides:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
 
@@ -85,6 +87,11 @@ flutter_launcher_icons:
     icon_size: 256
   android: true
   image_path_android: "res/icon.png"
+  # iOS icons have to be opaque and 1024x1024, which is why the transparent
+  # source icon cannot be used directly.
+  ios: true
+  image_path_ios: "res/icon_ios.png"
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true

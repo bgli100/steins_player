@@ -3,11 +3,15 @@
     Builds Lullaby Core for Windows, Android and HarmonyOS in a single run.
 
 .DESCRIPTION
-    One command produces every platform build:
+    One command produces every platform build it can drive from Windows:
 
       * Windows   -> build\windows\x64\runner\Release\lullaby_core.exe
       * Android   -> build\app\outputs\flutter-apk\app-release.apk
       * HarmonyOS -> build\ohos\hap\lullaby_core-<mode>-signed.hap
+
+    iOS is not built here: it needs Xcode, which only exists on macOS. The
+    `.github/workflows/ios.yml` workflow builds it (without code signing) and
+    runs the simulator smoke test instead.
 
     The HarmonyOS HAP is signed with the local HoKit debug material as part of
     the build, so it is ready to install on a development device.

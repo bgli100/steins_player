@@ -1,0 +1,76 @@
+name: ios
+
+# iOS cannot be built on Windows, which is where this project is developed: the
+# toolchain (Xcode, its clang/apple toolchain, actool, codesign, `xcrun simctl`)
+# only exists on macOS. This workflow is the build and smoke test for iOS.
+#
+# The two jobs answer different questions:
+#   build     - does it compile at all (pods, Swift, deployment target, ...)?
+#   simulator - does it run: asset playback through libmpv, texture output,
+#               the splash -> home transition (integration_test).
+#
+# Signing is off (`--no-codesign`), so the artifact cannot be installed on a
+# device. Signing an .ipa needs an Apple Developer account and the certificates
+# stored as secrets, or a Mac.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build without code signing
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      - name: build the app
+        run: flutter build ios --release --no-codesign
+
+      - name: report the app size
+        run: |
+          set -euo pipefail
+          df -h
+          du -sh build/ios/iphoneos/Runner.app
+          ls -la build/ios/iphoneos
+
+  simulator:
+    name: smoke test on the simulator
+    needs: build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: boot an iPhone simulator
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list devices available --json | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: run the boot smoke test
+        run: flutter test integration_test/app_boot_test.dart -d "$SIM_UDID" --timeout 20m
