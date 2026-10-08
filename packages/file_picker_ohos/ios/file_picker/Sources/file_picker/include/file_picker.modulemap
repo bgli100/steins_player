@@ -1,4 +1,4 @@
-framework module file_picker {
+framework module file_picker_ohos {
   umbrella header "file_picker-umbrella.h"
 
   export *
