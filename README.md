@@ -33,17 +33,3 @@ Developer account.
 `packages/file_picker_ohos` is a trimmed copy of the OHOS fork of `file_picker`,
 with its podspecs and Objective-C module named after the package - CocoaPods
 fails otherwise. Keep it in sync with the fork.
-
-## Update feed
-
-On start the app fetches `version.json` (`Update.feedUrl`) and, for a newer
-release, shows the notes with one button per link:
-
-```json
-{ "version": "1.1.0", "announcement": "release notes",
-  "download_url": "https://example.net/primary", "download_name": "百度网盘",
-  "download_url2": "https://example.net/mirror", "download_name2": "夸克网盘" }
-```
-
-`download_url2` / `download_name2` are optional; unnamed links get `去下载` and
-`备用下载`, empty ones are skipped.
