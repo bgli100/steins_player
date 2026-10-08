@@ -23,6 +23,15 @@ concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # The app is built with the HarmonyOS fork of the Flutter/Dart SDK: the
+  # dependencies (fluent_ui, media_kit) and lib/ use its `TargetPlatform.ohos` /
+  # `Platform.isOhos`, which upstream does not have. Building iOS with the same
+  # SDK keeps one toolchain for every platform; the fork's engine revision
+  # publishes the iOS artifacts too.
+  FLUTTER_FORK: https://gitcode.com/openharmony-sig/flutter_flutter.git
+  FLUTTER_FORK_REF: oh-3.44.9-dev
+
 jobs:
   build:
     name: build without code signing
@@ -30,10 +39,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: install the project's Flutter SDK
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$FLUTTER_FORK_REF" "$FLUTTER_FORK" "$RUNNER_TEMP/flutter_sdk"
+          echo "$RUNNER_TEMP/flutter_sdk/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/cache@v4
         with:
-          channel: stable
-          cache: true
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
 
       - run: flutter --version
       - run: flutter pub get
@@ -65,10 +80,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: install the project's Flutter SDK
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$FLUTTER_FORK_REF" "$FLUTTER_FORK" "$RUNNER_TEMP/flutter_sdk"
+          echo "$RUNNER_TEMP/flutter_sdk/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/cache@v4
         with:
-          channel: stable
-          cache: true
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
 
       - run: flutter pub get
 
