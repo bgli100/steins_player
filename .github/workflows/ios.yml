@@ -37,6 +37,14 @@ jobs:
 
       - run: flutter --version
       - run: flutter pub get
+
+      # res\ holds the ~2.8 GB of videos and is not in the repository (see
+      # README). Everything below only needs the paths to exist: the build
+      # bundles what is there, and the smoke test plays the tiny fixture so a
+      # real H.264 stream still goes through libmpv.
+      - name: stub the media assets
+        run: bash tool/stub_assets.sh
+
       - run: flutter analyze
       - run: flutter test
 
@@ -63,6 +71,9 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: stub the media assets
+        run: bash tool/stub_assets.sh
 
       - name: boot an iPhone simulator
         run: |

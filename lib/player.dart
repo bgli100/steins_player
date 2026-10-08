@@ -320,9 +320,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           lockParentWindow: true,
         );
         if (location != null) await steins.save(location);
-      } else if (Platform.isOhos) {
+      } else if (Platform.operatingSystem == 'ohos') {
         // `file_picker` drops the payload of save() on HarmonyOS, so the
         // system picker is driven by the native channel instead.
+        // (`Platform.isOhos` would be shorter, but it only exists in the
+        // HarmonyOS fork of the Dart SDK.)
         location = await _saveFileChannel.invokeMethod<String>('save', {
           'fileName': suggestedName,
           'bytes': Uint8List.fromList(utf8.encode(steins.encodeSaveData())),
