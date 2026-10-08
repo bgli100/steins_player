@@ -15,53 +15,24 @@ themselves are not included.
 .\build.ps1 -ShowConfig         # print the effective settings
 ```
 
-iOS needs Xcode and is built by CI instead - see [iOS](#ios).
-
-Artifacts land in `dist\` (git-ignored, `-Dist <dir>` to change) named after the
-version in `pubspec.yaml`:
-
-| Platform  | Package | Build output |
-| --------- | ------- | ------------ |
-| Windows   | `Lullaby Core <version>-windows.zip` | `build\windows\x64\runner\Release\` |
-| Android   | `Lullaby Core <version>-android.apk` | `build\app\outputs\flutter-apk\app-release.apk` |
-| HarmonyOS | `Lullaby Core <version>-ohos.hap` | `ohos\entry\build\default\outputs\default\` |
-| iOS       | `Runner.app` (CI, unsigned) | `build/ios/iphoneos/Runner.app` |
-
-The Windows package is the whole `Release` directory; a non-release HAP carries
-its mode (`-ohos-debug.hap`). One three-platform run stages ~65 GB of
-intermediate copies of the 2.7 GB asset set, so the script deletes `build\`,
-`.dart_tool\` and the OHOS staging after packaging - `-KeepBuild` keeps them.
-
-Machine specific values (tool paths, signing) live in the git-ignored
-`build.local.json`: copy `build.local.example.json` and fill it in. Every key is
-also a parameter of the same name, and the passwords fall back to
-`$env:HOKIT_KEYSTORE_PWD` / `$env:HOKIT_KEY_PWD`. Without signing material the
-HAP is packaged with hvigor's own signature, unsigned as a last resort. The
-HarmonyOS bundle name is `com.lullaby.steins_player.ohos`, and provisioning
-profiles are issued per bundle name, so a rename needs a new profile.
+Packages land in `dist\` (git-ignored), named after the version in
+`pubspec.yaml`. Tool paths and signing material go in the git-ignored
+`build.local.json` - copy `build.local.example.json`; every key is also a script
+parameter, and the passwords fall back to `$env:HOKIT_KEYSTORE_PWD` /
+`$env:HOKIT_KEY_PWD`. Without signing material the HAP is unsigned. The HarmonyOS
+bundle name is `com.lullaby.steins_player.ohos`, and provisioning profiles are
+issued per bundle name, so a rename needs a new profile.
 
 ## iOS
 
-`.github/workflows/ios.yml` builds iOS on a `macos-15` runner (`analyze`, unit
-tests, `flutter build ios --release --no-codesign`, plus a boot smoke test on an
-iPhone simulator). Signing for a device or TestFlight needs an Apple Developer
-account and is not covered. On macOS, locally: `flutter build ios --release
---no-codesign`, or `flutter test integration_test/app_boot_test.dart -d
-<simulator-udid>` for the smoke test.
+Xcode only runs on macOS, so iOS is built by CI:
+`.github/workflows/ios.yml` (analyze, unit tests, unsigned build, boot smoke test
+on an iPhone simulator). Signing for a device or TestFlight needs an Apple
+Developer account.
 
-`integration_test/app_boot_test.dart` waits for the splash screen to hand over
-to the home page, which only happens once the introduction clip has played
-through libmpv - that covers `MediaKit.ensureInitialized()`, the texture video
-output and playback. `res\` and `dist\` are not in the repository, so the
-workflow fills the declared asset paths from `test/fixtures/loading.mp4`
-(`tool/stub_assets.sh`) and builds with the HarmonyOS SDK fork the project uses.
-
-Xcode project: `ios/Runner.xcworkspace`, bundle id `com.lullaby.steinsplayer`,
-landscape only, icon from `res/icon_ios.png` (opaque 1024x1024; the transparent
-`res/icon.png` is invalid for iOS). `packages/file_picker_ohos` is a trimmed copy
-of the OHOS fork of `file_picker`, with its podspecs and Objective-C module named
-after the package - otherwise CocoaPods fails with
-`No podspec found for file_picker_ohos`. Keep it in sync with the fork.
+`packages/file_picker_ohos` is a trimmed copy of the OHOS fork of `file_picker`,
+with its podspecs and Objective-C module named after the package - CocoaPods
+fails otherwise. Keep it in sync with the fork.
 
 ## Update feed
 
