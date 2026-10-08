@@ -13,10 +13,19 @@ name: ios
 # device. Signing an .ipa needs an Apple Developer account and the certificates
 # stored as secrets, or a Mac.
 
+# Documentation cannot change the build, so those commits are filtered out:
+# a README edit used to occupy two macOS runners for ~20 minutes.
+# (If this workflow ever becomes a required status check, drop the
+# `pull_request` filter: a skipped check leaves such a PR waiting for ever.)
 on:
   push:
     branches: [main]
+    paths-ignore: &paths-ignore
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
   pull_request:
+    paths-ignore: *paths-ignore
   workflow_dispatch:
 
 concurrency:
