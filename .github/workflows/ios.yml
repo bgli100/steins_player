@@ -59,6 +59,13 @@ jobs:
             git fetch --depth 1 origin '+refs/tags/*:refs/tags/*'
           echo "$HOME/flutter_sdk/bin" >> "$GITHUB_PATH"
 
+      # The HarmonyOS fork's tool demands a HarmonyOS SDK as soon as the project
+      # has an ohos\ folder (it regenerates the hvigor tooling and exits with
+      # "No Hmos SDK found" when none is installed). iOS does not need that
+      # platform, so the folder is parked outside the project for the run.
+      - name: park the HarmonyOS platform folder
+        run: mv ohos "$RUNNER_TEMP/ohos"
+
       - uses: actions/cache@v4
         with:
           path: ~/.pub-cache
@@ -110,6 +117,9 @@ jobs:
           git describe --tags --first-parent >/dev/null 2>&1 ||
             git fetch --depth 1 origin '+refs/tags/*:refs/tags/*'
           echo "$HOME/flutter_sdk/bin" >> "$GITHUB_PATH"
+
+      - name: park the HarmonyOS platform folder
+        run: mv ohos "$RUNNER_TEMP/ohos"
 
       - uses: actions/cache@v4
         with:
