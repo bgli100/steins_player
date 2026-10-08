@@ -34,8 +34,20 @@ build.local.json
 version
 analysis_benchmark.json
 
-# packages file containing multi-root paths
+# Package managers
 .packages.generated
+.pub/
+.pub-cache/
+.pub-preload-cache/
+
+# Generated inside the vendored packages/ copies (ohpm and hvigor caches)
+**/oh_modules/
+**/.hvigor/
+/packages/*/.dart_tool/
+/packages/*/build/
+/packages/*/ohos/build/
+/packages/*/ohos/.cxx/
+/packages/*/ohos/local.properties.generated
 
 # Flutter/Dart/Pub related
 **/doc/api/
