@@ -39,11 +39,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/flutter_sdk
+          key: flutter-sdk-${{ runner.os }}-${{ env.FLUTTER_FORK_REF }}
+
       - name: install the project's Flutter SDK
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch "$FLUTTER_FORK_REF" "$FLUTTER_FORK" "$RUNNER_TEMP/flutter_sdk"
-          echo "$RUNNER_TEMP/flutter_sdk/bin" >> "$GITHUB_PATH"
+          if [ ! -d "$HOME/flutter_sdk/.git" ]; then
+            # The branch has to carry its version tag, otherwise the tool
+            # reports 0.0.0-unknown and pub refuses the dependencies' Flutter
+            # constraints. 400 commits is well past the nearest tag.
+            git clone --branch "$FLUTTER_FORK_REF" --single-branch --depth 400 \
+              "$FLUTTER_FORK" "$HOME/flutter_sdk"
+          fi
+          cd "$HOME/flutter_sdk"
+          git describe --tags --first-parent >/dev/null 2>&1 ||
+            git fetch --depth 1 origin '+refs/tags/*:refs/tags/*'
+          echo "$HOME/flutter_sdk/bin" >> "$GITHUB_PATH"
 
       - uses: actions/cache@v4
         with:
@@ -80,11 +94,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/flutter_sdk
+          key: flutter-sdk-${{ runner.os }}-${{ env.FLUTTER_FORK_REF }}
+
       - name: install the project's Flutter SDK
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch "$FLUTTER_FORK_REF" "$FLUTTER_FORK" "$RUNNER_TEMP/flutter_sdk"
-          echo "$RUNNER_TEMP/flutter_sdk/bin" >> "$GITHUB_PATH"
+          if [ ! -d "$HOME/flutter_sdk/.git" ]; then
+            git clone --branch "$FLUTTER_FORK_REF" --single-branch --depth 400 \
+              "$FLUTTER_FORK" "$HOME/flutter_sdk"
+          fi
+          cd "$HOME/flutter_sdk"
+          git describe --tags --first-parent >/dev/null 2>&1 ||
+            git fetch --depth 1 origin '+refs/tags/*:refs/tags/*'
+          echo "$HOME/flutter_sdk/bin" >> "$GITHUB_PATH"
 
       - uses: actions/cache@v4
         with:
