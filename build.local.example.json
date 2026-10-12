@@ -10,5 +10,11 @@
     "profileFile": "",
     "keystorePwd": "",
     "keyPwd": ""
+  },
+  "android": {
+    "keystore": "android\\keystore\\lullaby-release.jks",
+    "keyAlias": "lullaby",
+    "keystorePwd": "",
+    "keyPwd": ""
   }
 }

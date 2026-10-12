@@ -16,11 +16,18 @@
     The HarmonyOS HAP is signed with the local HoKit debug material as part of
     the build, so it is ready to install on a development device.
 
+    The Android APK is signed with the release key from `build.local.json` and
+    verified with apksigner afterwards. AGP writes the signing scheme the minSdk
+    requires - v3 for API 29+ (Android 10), which is what this app supports - and
+    a debug signed APK is refused by some devices, vivo and iQOO outside
+    developer mode in particular, so a missing key is reported as a warning.
+
     Machine specific values (tool paths, the device key and the signing
     passwords) live in `build.local.json` next to this script, which is
     git-ignored: copy `build.local.example.json` to create it. Every value can
     also be passed as a parameter, and the passwords additionally fall back to
-    $env:HOKIT_KEYSTORE_PWD / $env:HOKIT_KEY_PWD.
+    $env:HOKIT_KEYSTORE_PWD / $env:HOKIT_KEY_PWD for HarmonyOS and
+    $env:LULLABY_KEYSTORE_PWD / $env:LULLABY_KEY_PWD for Android.
 
 .EXAMPLE
     .\build.ps1
@@ -87,7 +94,16 @@ param(
     [string]$AppCertFile,
     [string]$ProfileFile,
     [string]$KeystorePwd,
-    [string]$KeyPwd
+    [string]$KeyPwd,
+
+    # --- Android release key (defaults come from the settings file) ---
+    # The APK is signed with this key under the v1, v2 and v3 schemes; without it
+    # the release build falls back to the debug key, which some devices (vivo
+    # and iQOO outside developer mode, for one) refuse to install.
+    [string]$AndroidKeystore,
+    [string]$AndroidKeyAlias,
+    [string]$AndroidKeystorePwd,
+    [string]$AndroidKeyPwd
 )
 
 $ErrorActionPreference = 'Stop'
@@ -105,6 +121,14 @@ if (Test-Path $ConfigFile) {
         foreach ($name in 'hapSignTool', 'keystore', 'keyAlias', 'appCertFile', 'profileFile',
             'keystorePwd', 'keyPwd') {
             if ($json.ohos.PSObject.Properties.Name -contains $name) { $local[$name] = $json.ohos.$name }
+        }
+    }
+    if ($json.PSObject.Properties.Name -contains 'android') {
+        $androidKeys = @{ keystore = 'androidKeystore'; keyAlias = 'androidKeyAlias';
+            keystorePwd = 'androidKeystorePwd'; keyPwd = 'androidKeyPwd' }
+        foreach ($name in $androidKeys.Keys) {
+            $value = $json.android.PSObject.Properties[$name]
+            if ($value) { $local[$androidKeys[$name]] = $value.Value }
         }
     }
 }
@@ -128,6 +152,12 @@ $KeystorePwd = Use-Setting 'keystorePwd' $KeystorePwd $env:HOKIT_KEYSTORE_PWD
 $KeyPwd = Use-Setting 'keyPwd' $KeyPwd $env:HOKIT_KEY_PWD
 if ([string]::IsNullOrEmpty($KeyPwd)) { $KeyPwd = $KeystorePwd }
 
+$AndroidKeystore = Use-Setting 'androidKeystore' $AndroidKeystore (Join-Path $root 'android\keystore\lullaby-release.jks')
+$AndroidKeyAlias = Use-Setting 'androidKeyAlias' $AndroidKeyAlias 'lullaby'
+$AndroidKeystorePwd = Use-Setting 'androidKeystorePwd' $AndroidKeystorePwd $env:LULLABY_KEYSTORE_PWD
+$AndroidKeyPwd = Use-Setting 'androidKeyPwd' $AndroidKeyPwd $env:LULLABY_KEY_PWD
+if ([string]::IsNullOrEmpty($AndroidKeyPwd)) { $AndroidKeyPwd = $AndroidKeystorePwd }
+
 if ($ShowConfig) {
     $display = [ordered]@{
         'settings'      = if (Test-Path $ConfigFile) { $ConfigFile } else { "$ConfigFile (missing)" }
@@ -141,6 +171,9 @@ if ($ShowConfig) {
         'profile'       = if ($ProfileFile) { $ProfileFile } else { '(auto-detected)' }
         'keystore pwd'  = if ($KeystorePwd) { '(set)' } else { '(empty)' }
         'key pwd'       = if ($KeyPwd) { '(set)' } else { '(empty)' }
+        'apk keystore'  = $AndroidKeystore
+        'apk key alias' = $AndroidKeyAlias
+        'apk key pwd'   = if ($AndroidKeystorePwd) { '(set)' } else { '(empty)' }
     }
     foreach ($setting in $display.GetEnumerator()) {
         Write-Host ("{0,-14} {1}" -f $setting.Key, $setting.Value)
@@ -237,11 +270,11 @@ function Remove-BuildOutputs {
         $path = Join-Path $root $target
         if (-not (Test-Path $path)) { continue }
         # Windows keeps handles on freshly written directories (file watchers,
-        # antivirus), so retry a few times before giving up.
-        for ($attempt = 1; $attempt -le 3; $attempt++) {
+        # antivirus, Gradle daemons), so retry before giving up.
+        for ($attempt = 1; $attempt -le 6; $attempt++) {
             Remove-Item -Recurse -Force -Path $path -ErrorAction SilentlyContinue
             if (-not (Test-Path $path)) { break }
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds 5
         }
         if (Test-Path $path) {
             Write-Warning "could not remove $target (locked by another process; close the IDE and delete it by hand)"
@@ -298,6 +331,101 @@ function Resolve-Hdc {
     return $null
 }
 
+# Whether the APK can be signed with the release key. Everything missing only
+# downgrades the build to a debug-signed APK, which some devices refuse, so it
+# is a warning rather than an error.
+function Test-AndroidSignMaterial {
+    $missing = @()
+    if (-not (Test-Path $AndroidKeystore)) { $missing += "keystore: $AndroidKeystore" }
+    if ([string]::IsNullOrEmpty($AndroidKeystorePwd)) {
+        $missing += 'password (-AndroidKeystorePwd or $env:LULLABY_KEYSTORE_PWD)'
+    }
+    if ($missing.Count -gt 0) {
+        foreach ($item in $missing) { Write-Warning "Android release signing skipped, missing $item" }
+        return $false
+    }
+    return $true
+}
+
+# Gradle reads android\key.properties (the Flutter convention), so the key is
+# written there for the build. Written as UTF-8 without a BOM and with forward
+# slashes: java.util.Properties would take a BOM for part of the first key name
+# and treats a backslash as an escape.
+function Write-AndroidKeyProperties {
+    $lines = @(
+        "storeFile=$($AndroidKeystore -replace '\\', '/')",
+        "storePassword=$AndroidKeystorePwd",
+        "keyAlias=$AndroidKeyAlias",
+        "keyPassword=$AndroidKeyPwd"
+    )
+    $path = Join-Path $root 'android\key.properties'
+    [IO.File]::WriteAllText($path, ($lines -join [Environment]::NewLine) + [Environment]::NewLine,
+        (New-Object System.Text.UTF8Encoding($false)))
+    return $path
+}
+
+# The apksigner the Android SDK installs, used to check what an APK really
+# carries (the build log alone does not show whether the release key was used).
+function Resolve-ApkSigner {
+    $sdkRoots = @()
+    $localProperties = Join-Path $root 'android\local.properties'
+    if (Test-Path $localProperties) {
+        $match = [regex]::Match((Get-Content -Raw $localProperties), '(?m)^sdk\.dir\s*=\s*(.+)$')
+        if ($match.Success) { $sdkRoots += ($match.Groups[1].Value.Trim() -replace '\\\\', '\') }
+    }
+    if ($env:ANDROID_HOME) { $sdkRoots += $env:ANDROID_HOME }
+    if ($env:ANDROID_SDK_ROOT) { $sdkRoots += $env:ANDROID_SDK_ROOT }
+
+    foreach ($sdk in $sdkRoots) {
+        $buildTools = Join-Path $sdk 'build-tools'
+        if (-not (Test-Path $buildTools)) { continue }
+        $found = Get-ChildItem $buildTools -Directory |
+            Where-Object { $_.Name -as [version] } |
+            Sort-Object { [version]$_.Name } -Descending |
+            ForEach-Object { Join-Path $_.FullName 'apksigner.bat' } |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+        if ($found) { return $found }
+    }
+    return $null
+}
+
+function Test-ApkSignature([string]$apk) {
+    $apksigner = Resolve-ApkSigner
+    if (-not $apksigner) {
+        Write-Warning 'apksigner not found in the Android SDK build-tools; cannot verify the APK.'
+        return $null
+    }
+    Write-Header 'Verifying APK signature'
+    $report = & $apksigner verify --verbose --print-certs $apk 2>&1
+    $enabled = @()
+    foreach ($line in $report) {
+        if ($line -match '^Verified using (v[\d.]+) scheme.*:\s*(\S+)') {
+            if ($Matches[2] -eq 'true') { $enabled += $Matches[1] }
+            Write-Host "  $line"
+        }
+        elseif ($line -match 'certificate DN:\s*(.+)$') {
+            Write-Host "  certificate: $($Matches[1])"
+        }
+    }
+    if ($report -match 'DOES NOT VERIFY') {
+        Write-Warning 'the APK signature does not verify!'
+        return 'invalid'
+    }
+    if ($report -match 'CN=Android Debug') {
+        Write-Warning 'the APK is signed with the debug key; some devices refuse to install it.'
+        return "debug key ($($enabled -join ', '))"
+    }
+    # Android 9 (API 28) verifies v3, and the lowest supported platform here is
+    # Android 10 (minSdk 29), so v3 on its own is enough. A v1-only APK is what
+    # Android 11+ rejects for targetSdk 30+.
+    if (-not ($enabled | Where-Object { $_ -ne 'v4' -and $_ -ne 'v1' })) {
+        Write-Warning "the APK only carries $($enabled -join ', '); Android 11+ rejects a v1-only APK when targetSdk is 30 or higher."
+    }
+    $installSchemes = $enabled | Where-Object { $_ -ne 'v4' }
+    return "release key, $($installSchemes -join '+')"
+}
+
 Push-Location $root
 try {
     Write-Host "Building Lullaby Core ($(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))" -ForegroundColor White
@@ -334,7 +462,18 @@ try {
 
     if (-not $PackageOnly -and ($Platforms -contains 'android')) {
         Write-Header 'Android release'
+        if (Test-AndroidSignMaterial) {
+            $keyFile = Write-AndroidKeyProperties
+            Write-Host "signing with the release key $AndroidKeystore" -ForegroundColor DarkGray
+            Write-Host "AGP writes the scheme the minSdk needs (v3 for API 29+)" -ForegroundColor DarkGray
+            Write-Host "key material: $keyFile (git-ignored)" -ForegroundColor DarkGray
+        }
         Invoke-Flutter @('build', 'apk', '--release')
+        $apk = 'build\app\outputs\flutter-apk\app-release.apk'
+        if (Test-Path $apk) {
+            $signature = Test-ApkSignature $apk
+            if ($signature) { $results['android-sign'] = "OK    $signature" }
+        }
     }
 
     if (-not $PackageOnly -and ($Platforms -contains 'ohos')) {

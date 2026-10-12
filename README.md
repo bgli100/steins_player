@@ -19,9 +19,16 @@ Packages land in `dist\` (git-ignored), named after the version in
 `pubspec.yaml`. Tool paths and signing material go in the git-ignored
 `build.local.json` - copy `build.local.example.json`; every key is also a script
 parameter, and the passwords fall back to `$env:HOKIT_KEYSTORE_PWD` /
-`$env:HOKIT_KEY_PWD`. Without signing material the HAP is unsigned. The HarmonyOS
-bundle name is `com.lullaby.steins_player.ohos`, and provisioning profiles are
-issued per bundle name, so a rename needs a new profile.
+`$env:HOKIT_KEY_PWD` (HarmonyOS) and `$env:LULLABY_KEYSTORE_PWD` /
+`$env:LULLABY_KEY_PWD` (Android). Without signing material the HAP is unsigned
+and the APK is debug-signed - some devices refuse a debug-signed APK, so the
+release key lives in `android\keystore\lullaby-release.jks` and its password in
+`build.local.json`; **back that file up**, an app installed from it can only be
+updated with it. The build writes `android\key.properties` (git-ignored) for
+Gradle and verifies the APK with apksigner afterwards; the APK carries the
+scheme the lowest supported Android needs, v3 for API 29+. The HarmonyOS bundle
+name is `com.lullaby.steins_player.ohos`, and provisioning profiles are issued
+per bundle name, so a rename needs a new profile.
 
 ## iOS
 
