@@ -103,6 +103,26 @@ jobs:
           du -sh build/ios/iphoneos/Runner.app
           ls -la build/ios/iphoneos
 
+      # A device install needs an .ipa, and packaging one is a directory
+      # arrangement - xcodebuild's -exportArchive wants signing material, which
+      # this job does not have. The result is unsigned: a sideloading tool has to
+      # sign it with an Apple ID before an iPad will accept it.
+      - name: package the unsigned ipa
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/Payload" LullabyCore-unsigned.ipa
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R build/ios/iphoneos/Runner.app "$RUNNER_TEMP/Payload/Runner.app"
+          (cd "$RUNNER_TEMP" && zip -qry "$GITHUB_WORKSPACE/LullabyCore-unsigned.ipa" Payload)
+          ls -la LullabyCore-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lullaby-core-unsigned-ipa
+          path: LullabyCore-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
   simulator:
     name: smoke test on the simulator
     needs: build
