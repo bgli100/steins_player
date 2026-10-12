@@ -40,3 +40,12 @@ Developer account.
 `packages/file_picker_ohos` is a trimmed copy of the OHOS fork of `file_picker`,
 with its podspecs and Objective-C module named after the package - CocoaPods
 fails otherwise. Keep it in sync with the fork.
+
+## Work data
+
+The works under `res/works/` are not in the repository.
+`tool/fix_sakiko_clock.py` patches the sakiko work and has to be re-run after
+that work is downloaded again: it resets 时刻 (variable `D`) when a night starts
+and lets 下班 out at `D >= gate` instead of `D = gate`. Without it, retrying
+after a death restarted the night with the clock the player died with, and the
+night's own gates then blocked every option - the story ended right there.

@@ -321,6 +321,69 @@ function Resolve-OhosSignMaterial {
     return $true
 }
 
+# The media_kit Windows plugin downloads a pre-built libmpv archive into the
+# build directory, which this script deletes after every run, and a flaky
+# download costs ten minutes before the build gives up. Keeping a verified copy
+# in dist\cache lets the next Windows build start without that download.
+function Get-MediaKitArchive {
+    $plugin = Join-Path $root 'windows\flutter\ephemeral\.plugin_symlinks\media_kit_libs_windows_video\windows\CMakeLists.txt'
+    if (-not (Test-Path $plugin)) {
+        # After a clean, the symlink does not exist yet; the package itself is
+        # in the pub cache, which package_config.json points at.
+        $config = Join-Path $root '.dart_tool\package_config.json'
+        if (-not (Test-Path $config)) { return $null }
+        $packages = (Get-Content -Raw $config | ConvertFrom-Json).packages
+        $entry = $packages | Where-Object { $_.name -eq 'media_kit_libs_windows_video' }
+        if (-not $entry) { return $null }
+        $rootUri = $entry.rootUri -replace '^file:///', '' -replace '/', '\'
+        $plugin = Join-Path $rootUri 'windows\CMakeLists.txt'
+    }
+    if (-not (Test-Path $plugin)) { return $null }
+    $text = Get-Content -Raw $plugin
+    $name = [regex]::Match($text, 'set\(LIBMPV "([^"]+)"\)').Groups[1].Value
+    $md5 = [regex]::Match($text, 'set\(LIBMPV_MD5 "([^"]+)"\)').Groups[1].Value
+    if (-not $name -or -not $md5) { return $null }
+    return @{
+        Name   = $name
+        Md5    = $md5
+        Target = Join-Path $root "build\windows\x64\$name"
+        Cache  = Join-Path $root "dist\cache\$name"
+    }
+}
+
+# Copies the archive between the build directory and the cache, whichever side
+# holds a copy whose MD5 the plugin accepts.
+function Sync-MediaKitArchive {
+    $archive = Get-MediaKitArchive
+    if (-not $archive) { return }
+    foreach ($pair in @(@($archive.Target, $archive.Cache), @($archive.Cache, $archive.Target))) {
+        $source, $destination = $pair
+        if (-not (Test-Path $source)) { continue }
+        if ((Get-FileHash $source -Algorithm MD5).Hash -ne $archive.Md5) { continue }
+        New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+        Copy-Item -Force $source $destination
+        if ($destination -eq $archive.Target) {
+            Write-Host "restored $($archive.Name) from the cache" -ForegroundColor DarkGray
+        }
+    }
+}
+
+# A Windows configure that aborts early - a plugin download that fails, for
+# instance - leaves CMakeCache.txt holding CMake's own default install prefix.
+# The Flutter template only rewrites that while the value still looks untouched,
+# so the INSTALL step would keep writing into Program Files and fail; start from
+# a clean build\windows in that case.
+function Reset-StaleWindowsCMakeCache {
+    $cache = Join-Path $root 'build\windows\x64\CMakeCache.txt'
+    if (-not (Test-Path $cache)) { return }
+    $match = [regex]::Match((Get-Content -Raw $cache), '(?m)^CMAKE_INSTALL_PREFIX:PATH=(.+)$')
+    $prefix = $match.Groups[1].Value.Trim()
+    if (-not $prefix) { return }
+    if ($prefix -like '*TARGET_FILE_DIR*' -or $prefix -like "*$root*") { return }
+    Write-Warning "the CMake cache install prefix is '$prefix'; clearing build\windows"
+    Remove-Item -Recurse -Force (Join-Path $root 'build\windows') -ErrorAction SilentlyContinue
+}
+
 function Resolve-Hdc {
     if ($Hdc) {
         if (Test-Path $Hdc) { return $Hdc }
@@ -450,7 +513,10 @@ try {
 
     if (-not $PackageOnly -and ($Platforms -contains 'windows')) {
         Write-Header 'Windows release'
+        Reset-StaleWindowsCMakeCache
+        Sync-MediaKitArchive
         Invoke-Flutter @('build', 'windows', '--release')
+        Sync-MediaKitArchive
         $exe = 'build\windows\x64\runner\Release\lullaby_core.exe'
         if (-not (Test-Path $exe)) {
             # Older CMake setups still produce the previous binary name.
