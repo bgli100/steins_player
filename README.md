@@ -37,6 +37,12 @@ Xcode only runs on macOS, so iOS is built by CI:
 on an iPhone simulator). Signing for a device or TestFlight needs an Apple
 Developer account.
 
+`tool/build_ios_ipa.py` turns that run's artifact into the release package: it
+fetches the unsigned `.ipa` (or takes a local one), swaps in this checkout's
+`res\` and the matching `AssetManifest.bin` - the CI build only has stubs - and
+writes `dist\Lullaby Core <version>-ios.ipa`. The result is still unsigned; a
+sideloading tool or Xcode has to sign it before a device accepts it.
+
 `packages/file_picker_ohos` is a trimmed copy of the OHOS fork of `file_picker`,
 with its podspecs and Objective-C module named after the package - CocoaPods
 fails otherwise. Keep it in sync with the fork.
