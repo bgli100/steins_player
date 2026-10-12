@@ -65,13 +65,10 @@ android {
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
-                // minSdk is 29 and Android 9 (API 28) already verifies v3, so
-                // v3 alone covers every supported device; v1 would only be used
-                // by Android 6 and older. AGP writes the schemes the minSdk
-                // needs (v3 here), the flags record the intent.
-                enableV1Signing = false
-                enableV2Signing = true
-                enableV3Signing = true
+                // Gradle's own choice: v2 for a minSdk above 23 (Android 10 here).
+                // That is what Android 7 and newer verify and what installers
+                // look for; v1 would only be read below API 24, and v3 adds key
+                // rotation, which this project does not use.
             }
         }
     }

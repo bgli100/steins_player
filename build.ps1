@@ -465,7 +465,7 @@ try {
         if (Test-AndroidSignMaterial) {
             $keyFile = Write-AndroidKeyProperties
             Write-Host "signing with the release key $AndroidKeystore" -ForegroundColor DarkGray
-            Write-Host "AGP writes the scheme the minSdk needs (v3 for API 29+)" -ForegroundColor DarkGray
+            Write-Host "AGP picks the scheme (v2 for this minSdk), verified below" -ForegroundColor DarkGray
             Write-Host "key material: $keyFile (git-ignored)" -ForegroundColor DarkGray
         }
         Invoke-Flutter @('build', 'apk', '--release')

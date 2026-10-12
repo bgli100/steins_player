@@ -25,10 +25,10 @@ and the APK is debug-signed - some devices refuse a debug-signed APK, so the
 release key lives in `android\keystore\lullaby-release.jks` and its password in
 `build.local.json`; **back that file up**, an app installed from it can only be
 updated with it. The build writes `android\key.properties` (git-ignored) for
-Gradle and verifies the APK with apksigner afterwards; the APK carries the
-scheme the lowest supported Android needs, v3 for API 29+. The HarmonyOS bundle
-name is `com.lullaby.steins_player.ohos`, and provisioning profiles are issued
-per bundle name, so a rename needs a new profile.
+Gradle, which picks the signing scheme (v2 for this minSdk), and verifies the
+result with apksigner afterwards. The HarmonyOS bundle name is
+`com.lullaby.steins_player.ohos`, and provisioning profiles are issued per bundle
+name, so a rename needs a new profile.
 
 ## iOS
 
